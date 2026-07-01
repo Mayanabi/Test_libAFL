@@ -1,0 +1,43 @@
+# ─── fuzz_config.toml — Configuration de campagne Maya LibAFL ────────────────
+#
+# Modifie ce fichier avant de lancer `cargo run` — pas besoin de recompiler.
+#
+# ─── MODE ─────────────────────────────────────────────────────────────────────
+#
+#   single_app  → une seule app ciblée        (apps = ["ES"])
+#   multi_app   → plusieurs apps ciblées      (apps = ["ES", "CF", "EVS"])
+#   all         → toutes les apps sans liste  (apps ignoré, ~315 TC)
+#   cross_app   → séquences multi-apps        (mix aléatoire d'apps différentes)
+#
+mode = "cross_app"
+
+# ─── APPS CIBLÉES ─────────────────────────────────────────────────────────────
+# Utilisé pour single_app et multi_app uniquement.
+# Pour "all" et "cross_app", ce champ est ignoré — toutes les apps sont incluses.
+#
+# cFE core   : ES, EVS, SB, TBL, TIME
+# cFS apps   : CF, CI, CS, DS, FM, HK, HS, LC, MD, MM, SC, SCH, SBN, TO, TO_LAB
+# Composants : ARDUCAM, GENERIC_ADCS, GENERIC_CSS, GENERIC_EPS, GENERIC_FSS,
+#              GENERIC_IMU, GENERIC_MAG, GENERIC_RADIO, GENERIC_REACTION_WHEEL,
+#              GENERIC_STAR_TRACKER, GENERIC_THRUSTER, GENERIC_TORQUER,
+#              MGR, NOVATEL_OEM615, SAMPLE, SYN
+#
+apps = ["ES","CF","CI", "CS", "DS", "FM", "HK","HS", "LC", "MD", "MM", "SC"]
+
+# ─── FILTRE PAR PRIORITÉ ──────────────────────────────────────────────────────
+# Optionnel — commenter pour fuzzer toutes les priorités.
+# Valeurs : "CRITICAL" | "HIGH" | "MEDIUM" | "NORMAL"
+#
+# fuzz_priority = "CRITICAL"
+
+# ─── SEEDS INITIALES ──────────────────────────────────────────────────────────
+# Nombre de TC tirées aléatoirement pour initialiser le corpus au démarrage.
+#
+seed_count = 8
+
+# ─── PARAMÈTRES CROSS-APP ─────────────────────────────────────────────────────
+# Actifs uniquement si mode = "cross_app".
+# Chaque séquence contiendra entre min et max TC, une par app différente.
+#
+cross_app_min_tc = 2
+cross_app_max_tc = 5
