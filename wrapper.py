@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-WRAPPER.PY — Maya 3.0 (réel — branché sur CmdSender + maya_feedback.log)
+WRAPPER.PY — Maya 3.0 (branché sur CmdSender + maya_feedback.log)
 
 Reçoit sur stdin le JSON CcsdsSequenceInput sérialisé par Nos3Executor.
 Envoie TOUTES les commandes de la séquence vers NOS3/cFS via UDP, dans l'ordre,
@@ -20,31 +20,34 @@ import json
 import os
 import random
 import socket
+import subprocess
 import sys
 import time
 
-# CmdSender.py est dans le repo fuzzer — ajout explicite au path car wrapper.py
-# est appelé comme subprocess depuis un répertoire arbitraire par LibAFL.
+#ajout explicite au path car wrapper.py est appelé comme subprocess depuis
+#un répertoire arbitraire par LibAFL.
 _CMDSENDER_DIR = "/home/jstar/Desktop/fuzzer/input_generator_dev"
 sys.path.insert(0, _CMDSENDER_DIR)
 import CmdSender        # noqa: E402  # type: ignore[import-not-found]
 import ProcessMonitoring  # noqa: E402  # type: ignore[import-not-found]
 
+# Répertoire du repo NOS3 (contient le Makefile : make stop / make launch)
+_NOS3_DIR      = "/home/jstar/Desktop/github-nos3"
 # Log écrit par ci_lab_app.c (chemin hardcodé côté cFS, voir ci_lab_app.c:186)
 _LOG_PATH      = "/home/jstar/Desktop/github-nos3/maya_feedback.log"
-_POLL_INTERVAL   = 0.005  # 5 ms entre chaque lecture du log (était 20 ms)
+_POLL_INTERVAL   = 0.005  # 5 ms entre chaque lecture du log
 _POLL_TIMEOUT    = 1.0    # 1 s max avant de déclarer TIMEOUT (executor timeout = 5 s)
-_RESTART_WAIT    = 90.0   # temps max d'attente si NOS3 redémarre (secondes)
+_RESTART_WAIT    = 90.0   # temps max d'attente que cFS réponde après make launch
 _RESTART_POLL    = 2.0    # intervalle de vérification pendant le restart
+_MAKE_TIMEOUT    = 180.0  # temps max pour chacun de make stop / make launch
 
 # Endianness Rust → format attendu par CmdSender.py
 _ENDIAN = {"BIG": "BIG_ENDIAN", "LITTLE": "LITTLE_ENDIAN"}
 
 # IP et PID résolus une seule fois par Rust au démarrage, passés via env vars.
-# Évite 2× docker exec par exécution (50–500 ms chacun) dans le hot path.
 _NOS3_IP   = os.environ.get("NOS3_IP")      or CmdSender.getDockerIP()
 _INIT_PID  = os.environ.get("NOS3_CFS_PID") or ProcessMonitoring.get_cfs_pid()
-_FUZZ_MODE = os.environ.get("FUZZ_MODE", "normal")  # "naive" | "stateful" | "normal"
+_FUZZ_MODE = os.environ.get("FUZZ_MODE", "normal")  # si pas configuré par défaut c normal
 
 # Socket UDP réutilisé pour toute la durée du processus.
 _SOCK = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -65,7 +68,7 @@ def _to_sender_arg(arg: dict) -> dict:
 
 
 def _log_offset() -> int:
-    """Retourne la taille actuelle du log en bytes (position de lecture de départ)."""
+    """positionn de lecture de départ du log """
     try:
         return os.path.getsize(_LOG_PATH)
     except OSError:
@@ -113,14 +116,30 @@ def _poll_log(start: int, msgid_hex: str) -> str:
 
 def _wait_for_nos3_ready() -> None:
     """
-    Bloque jusqu'à ce que NOS3/cFS soit de nouveau disponible après un restart.
+    Force un redémarrage propre de NOS3 (make stop && make launch) après un
+    crash, pour repartir toujours du même état initial connu, puis bloque
+    jusqu'à ce que cFS réponde de nouveau.
 
     Appelée dès qu'un crash/restart est détecté, AVANT de retourner le verdict
-    à LibAFL. Cela évite que les ~60 invocations suivantes de wrapper.py
-    accumulent chacune 1 seconde de POLL_TIMEOUT pendant le redémarrage NOS3.
-    LibAFL reste bloqué sur cette unique invocation jusqu'au retour de cFS.
+    à LibAFL. LibAFL reste bloqué sur cette unique invocation de wrapper.py
+    jusqu'au retour de cFS — les tests suivants ne repartent qu'une fois NOS3
+    prêt, dans un état reproductible.
     """
-    print(f"[wrapper.py] NOS3 restart détecté — attente (max {_RESTART_WAIT}s)...",
+    print("[wrapper.py] cFS crash — redémarrage NOS3 (make stop && make launch)...",
+          file=sys.stderr)
+    for target in ("stop", "launch"):
+        try:
+            subprocess.run(
+                ["make", target],
+                cwd=_NOS3_DIR,
+                timeout=_MAKE_TIMEOUT,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            print(f"[wrapper.py] 'make {target}' a dépassé {_MAKE_TIMEOUT}s",
+                  file=sys.stderr)
+
+    print(f"[wrapper.py] make launch terminé — attente cFS (max {_RESTART_WAIT}s)...",
           file=sys.stderr)
     deadline = time.monotonic() + _RESTART_WAIT
     while time.monotonic() < deadline:
