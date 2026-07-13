@@ -7,8 +7,9 @@ edition = "2021"
 libafl = "0.15.3"
 libafl_bolts = "0.15.3"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-toml       = "0.8"
+serde_json  = "1"
+serde_yaml  = "0.9"
+toml        = "0.8"
 
 [profile.dev]
 panic = "abort"

@@ -19,12 +19,10 @@ pub struct Nos3Executor {
     pub wrapper_script: String,
     pub timeout: Duration,
     pub stdout_handle: Handle<StdOutObserver>,
-    /// IP Docker résolue une seule fois au démarrage, passée via NOS3_IP à chaque subprocess.
-    pub nos3_ip:  String,
-    /// PID initial de core-cpu1, résolu au démarrage Rust.
-    /// Passé via NOS3_CFS_PID — wrapper.py l'utilise pour détecter un restart
-    /// sans refaire de docker exec au début de chaque exécution.
-    pub cfs_pid:  String,
+    pub nos3_ip:   String,
+    pub cfs_pid:   String,
+    /// "naive" | "stateful" | "normal" — transmis à wrapper.py via FUZZ_MODE
+    pub fuzz_mode: String,
 }
 
 impl Nos3Executor {
@@ -34,13 +32,15 @@ impl Nos3Executor {
         stdout_handle: Handle<StdOutObserver>,
         nos3_ip: impl Into<String>,
         cfs_pid: impl Into<String>,
+        fuzz_mode: impl Into<String>,
     ) -> Self {
         Self {
             wrapper_script: wrapper_script.into(),
             timeout,
             stdout_handle,
-            nos3_ip: nos3_ip.into(),
-            cfs_pid: cfs_pid.into(),
+            nos3_ip:   nos3_ip.into(),
+            cfs_pid:   cfs_pid.into(),
+            fuzz_mode: fuzz_mode.into(),
         }
     }
 }
@@ -52,6 +52,7 @@ impl CommandConfigurator<Child> for Nos3Executor {
             .arg(&self.wrapper_script)
             .env("NOS3_IP",      &self.nos3_ip)
             .env("NOS3_CFS_PID", &self.cfs_pid)
+            .env("FUZZ_MODE",    &self.fuzz_mode)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());

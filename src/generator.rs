@@ -4,38 +4,10 @@ use libafl::{generators::Generator, state::HasRand, Error};
 use libafl_bolts::rands::Rand;
 
 use crate::catalogue::{Catalogue, CatalogueArg, CatalogueEntry};
+use crate::fsm::SharedFsm;
 use crate::input::{ArgType, CcsdsArg, CcsdsCommand, CcsdsSequenceInput, Endianness};
 
-pub struct CatalogueGenerator {
-    catalogue: Catalogue,
-    /// Toutes les clés du catalogue filtré — tirage O(1) par index aléatoire.
-    keys: Vec<String>,
-    /// Clés groupées par app — utilisé en mode cross_app pour garantir
-    /// qu'on pioche au plus une TC par app dans chaque séquence.
-    keys_by_app: HashMap<String, Vec<String>>,
-    /// Some((min, max)) active le mode cross-app.
-    cross_app: Option<(usize, usize)>,
-}
-
-impl CatalogueGenerator {
-    pub fn new(catalogue: Catalogue) -> Self {
-        let keys = catalogue.keys().cloned().collect();
-        let mut keys_by_app: HashMap<String, Vec<String>> = HashMap::new();
-        for (name, entry) in &catalogue {
-            keys_by_app.entry(entry.app.clone()).or_default().push(name.clone());
-        }
-        Self { catalogue, keys, keys_by_app, cross_app: None }
-    }
-
-    /// Active le mode cross-app : chaque séquence générée contiendra entre
-    /// `min_tc` et `max_tc` TC provenant d'apps différentes.
-    pub fn with_cross_app(mut self, min_tc: usize, max_tc: usize) -> Self {
-        self.cross_app = Some((min_tc, max_tc));
-        self
-    }
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers partagés ────────────────────────────────────────────────────────
 
 fn to_arg_type(s: &str) -> ArgType {
     match s {
@@ -81,7 +53,40 @@ fn build_command(name: &str, tpl: &CatalogueEntry, step: i32) -> CcsdsCommand {
     }
 }
 
-// ─── Generator impl ──────────────────────────────────────────────────────────
+// ─── CatalogueGenerator ──────────────────────────────────────────────────────
+
+pub struct CatalogueGenerator {
+    catalogue:    Catalogue,
+    keys:         Vec<String>,
+    keys_by_app:  HashMap<String, Vec<String>>,
+    /// Some((min, max)) → mode cross_app
+    cross_app:    Option<(usize, usize)>,
+    /// Some(n) → mode naive : génère n commandes par séquence sans attendre le feedback
+    naive_batch:  Option<usize>,
+}
+
+impl CatalogueGenerator {
+    pub fn new(catalogue: Catalogue) -> Self {
+        let keys = catalogue.keys().cloned().collect();
+        let mut keys_by_app: HashMap<String, Vec<String>> = HashMap::new();
+        for (name, entry) in &catalogue {
+            keys_by_app.entry(entry.app.clone()).or_default().push(name.clone());
+        }
+        Self { catalogue, keys, keys_by_app, cross_app: None, naive_batch: None }
+    }
+
+    pub fn with_cross_app(mut self, min_tc: usize, max_tc: usize) -> Self {
+        self.cross_app = Some((min_tc, max_tc));
+        self
+    }
+
+    /// Active le mode naive : `batch_size` commandes aléatoires par séquence,
+    /// sans poll du feedback (wrapper.py ne poll pas le log en mode FUZZ_MODE=naive).
+    pub fn with_naive_batch(mut self, batch_size: usize) -> Self {
+        self.naive_batch = Some(batch_size.max(1));
+        self
+    }
+}
 
 impl<S: HasRand> Generator<CcsdsSequenceInput, S> for CatalogueGenerator {
     fn generate(&mut self, state: &mut S) -> Result<CcsdsSequenceInput, Error> {
@@ -91,6 +96,21 @@ impl<S: HasRand> Generator<CcsdsSequenceInput, S> for CatalogueGenerator {
             ));
         }
 
+        // Mode naive : batch de N commandes aléatoires, pas de délai
+        if let Some(batch) = self.naive_batch {
+            let rng = state.rand_mut();
+            let commands = (1..=batch)
+                .map(|step| {
+                    let idx  = rng.next() as usize % self.keys.len();
+                    let name = &self.keys[idx];
+                    let tpl  = &self.catalogue[name];
+                    build_command(name, tpl, step as i32)
+                })
+                .collect();
+            return Ok(CcsdsSequenceInput { commands });
+        }
+
+        // Mode cross_app
         if let Some((min_tc, max_tc)) = self.cross_app {
             return Ok(self.generate_cross_app(state, min_tc, max_tc));
         }
@@ -105,24 +125,16 @@ impl<S: HasRand> Generator<CcsdsSequenceInput, S> for CatalogueGenerator {
 }
 
 impl CatalogueGenerator {
-    /// Génère une séquence cross-app : N TC choisies dans N apps différentes.
-    ///
-    /// Algorithme :
-    ///   1. Collect les noms d'apps (ordre fixe pour indexation)
-    ///   2. Fisher-Yates partiel pour sélectionner N apps sans répétition
-    ///   3. Pour chaque app sélectionnée, tirer une TC aléatoire
     fn generate_cross_app<S: HasRand>(&self, state: &mut S, min_tc: usize, max_tc: usize) -> CcsdsSequenceInput {
         let mut app_names: Vec<&String> = self.keys_by_app.keys().collect();
-        app_names.sort(); // ordre déterministe pour que l'index soit stable
+        app_names.sort();
 
         let n_apps = app_names.len();
         let rng    = state.rand_mut();
 
-        // Nombre de TC à sélectionner (borné par le nombre d'apps dispo)
         let span = if max_tc > min_tc { max_tc - min_tc } else { 0 };
         let n_tc = (min_tc + rng.next() as usize % (span + 1)).min(n_apps);
 
-        // Fisher-Yates partiel — mélange les n_tc premiers indices
         let mut indices: Vec<usize> = (0..n_apps).collect();
         for i in 0..n_tc {
             let j = i + rng.next() as usize % (n_apps - i);
@@ -139,5 +151,71 @@ impl CatalogueGenerator {
         }
 
         CcsdsSequenceInput { commands }
+    }
+}
+
+// ─── StatefulGenerator ───────────────────────────────────────────────────────
+
+/// Génère des commandes guidées par la machine d'états de chaque app NOS3.
+///
+/// À chaque appel, choisit aléatoirement une app, lit son état courant dans
+/// la FSM partagée, et sélectionne une commande valide pour cet état.
+/// Le feedback (Nos3Feedback) fait avancer la FSM après chaque exécution.
+pub struct StatefulGenerator {
+    catalogue:  Catalogue,
+    keys:       Vec<String>,           // fallback : toutes les clés
+    fsm:        SharedFsm,
+    app_names:  Vec<String>,           // apps qui ont une FSM chargée
+}
+
+impl StatefulGenerator {
+    pub fn new(catalogue: Catalogue, fsm: SharedFsm) -> Self {
+        let keys      = catalogue.keys().cloned().collect();
+        let app_names = fsm.lock().unwrap().app_names();
+        Self { catalogue, keys, fsm, app_names }
+    }
+}
+
+impl<S: HasRand> Generator<CcsdsSequenceInput, S> for StatefulGenerator {
+    fn generate(&mut self, state: &mut S) -> Result<CcsdsSequenceInput, Error> {
+        if self.app_names.is_empty() {
+            return Err(Error::illegal_state("StatefulGenerator: aucun FSM chargé"));
+        }
+
+        let rng = state.rand_mut();
+
+        // Essaie plusieurs apps pour en trouver une avec des commandes valides dans le catalogue
+        for _ in 0..20 {
+            let app = &self.app_names[rng.next() as usize % self.app_names.len()];
+
+            // Commandes valides = transitions depuis l'état courant + toujours valides
+            let mut candidates: Vec<(String, bool)> = vec![];
+            {
+                let runtime = self.fsm.lock().unwrap();
+                for t in runtime.valid_transitions(app) {
+                    candidates.push((t.tc_name.clone(), t.fuzz));
+                }
+                for c in runtime.always_valid(app) {
+                    candidates.push((c.tc_name.clone(), c.fuzz));
+                }
+            }
+
+            if candidates.is_empty() {
+                continue;
+            }
+
+            let (tc_name, fuzz_flag) = candidates[rng.next() as usize % candidates.len()].clone();
+
+            if let Some(tpl) = self.catalogue.get(&tc_name) {
+                let mut cmd = build_command(&tc_name, tpl, 1);
+                cmd.fuzz = fuzz_flag;
+                return Ok(CcsdsSequenceInput { commands: vec![cmd] });
+            }
+        }
+
+        // Fallback : commande aléatoire du catalogue
+        let name = self.keys[rng.next() as usize % self.keys.len()].clone();
+        let tpl  = &self.catalogue[&name];
+        Ok(CcsdsSequenceInput { commands: vec![build_command(&name, tpl, 1)] })
     }
 }

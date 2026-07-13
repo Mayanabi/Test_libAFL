@@ -8,12 +8,14 @@
 #   multi_app   → plusieurs apps ciblées      (apps = ["ES", "CF", "EVS"])
 #   all         → toutes les apps sans liste  (apps ignoré, ~315 TC)
 #   cross_app   → séquences multi-apps        (mix aléatoire d'apps différentes)
+#   naive       → flood sans feedback         (~110 pkt/sec, naive_batch_size paquets/exec)
+#   stateful    → guidé par machine d'états   (FSM YAMLs dans fsm_dir)
 #
-mode = "cross_app"
+mode = "single_app"
 
 # ─── APPS CIBLÉES ─────────────────────────────────────────────────────────────
 # Utilisé pour single_app et multi_app uniquement.
-# Pour "all" et "cross_app", ce champ est ignoré — toutes les apps sont incluses.
+# Pour les autres modes, ce champ est ignoré.
 #
 # cFE core   : ES, EVS, SB, TBL, TIME
 # cFS apps   : CF, CI, CS, DS, FM, HK, HS, LC, MD, MM, SC, SCH, SBN, TO, TO_LAB
@@ -22,7 +24,7 @@ mode = "cross_app"
 #              GENERIC_STAR_TRACKER, GENERIC_THRUSTER, GENERIC_TORQUER,
 #              MGR, NOVATEL_OEM615, SAMPLE, SYN
 #
-apps = ["ES","CF","CI", "CS", "DS", "FM", "HK","HS", "LC", "MD", "MM", "SC"]
+apps = ["NOVATEL_OEM615"]
 
 # ─── FILTRE PAR PRIORITÉ ──────────────────────────────────────────────────────
 # Optionnel — commenter pour fuzzer toutes les priorités.
@@ -31,13 +33,23 @@ apps = ["ES","CF","CI", "CS", "DS", "FM", "HK","HS", "LC", "MD", "MM", "SC"]
 # fuzz_priority = "CRITICAL"
 
 # ─── SEEDS INITIALES ──────────────────────────────────────────────────────────
-# Nombre de TC tirées aléatoirement pour initialiser le corpus au démarrage.
-#
 seed_count = 8
 
 # ─── PARAMÈTRES CROSS-APP ─────────────────────────────────────────────────────
 # Actifs uniquement si mode = "cross_app".
-# Chaque séquence contiendra entre min et max TC, une par app différente.
 #
 cross_app_min_tc = 2
 cross_app_max_tc = 5
+
+# ─── PARAMÈTRES NAIVE ─────────────────────────────────────────────────────────
+# Actif uniquement si mode = "naive".
+# Nombre de paquets envoyés par subprocess (sans attendre le feedback NOS3).
+# 10 paquets × ~11 exec/sec ≈ 110 paquets/sec.
+#
+naive_batch_size = 10
+
+# ─── PARAMÈTRES STATEFUL ──────────────────────────────────────────────────────
+# Actif uniquement si mode = "stateful".
+# Répertoire contenant les FSM YAMLs générés pour chaque app NOS3.
+#
+fsm_dir = "/home/jstar/Desktop/maya3/patterns/stateful"

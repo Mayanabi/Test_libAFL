@@ -42,8 +42,9 @@ _ENDIAN = {"BIG": "BIG_ENDIAN", "LITTLE": "LITTLE_ENDIAN"}
 
 # IP et PID résolus une seule fois par Rust au démarrage, passés via env vars.
 # Évite 2× docker exec par exécution (50–500 ms chacun) dans le hot path.
-_NOS3_IP  = os.environ.get("NOS3_IP")      or CmdSender.getDockerIP()
-_INIT_PID = os.environ.get("NOS3_CFS_PID") or ProcessMonitoring.get_cfs_pid()
+_NOS3_IP   = os.environ.get("NOS3_IP")      or CmdSender.getDockerIP()
+_INIT_PID  = os.environ.get("NOS3_CFS_PID") or ProcessMonitoring.get_cfs_pid()
+_FUZZ_MODE = os.environ.get("FUZZ_MODE", "normal")  # "naive" | "stateful" | "normal"
 
 # Socket UDP réutilisé pour toute la durée du processus.
 _SOCK = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -162,7 +163,29 @@ def _send_and_wait(cmd: dict) -> str:
         print(f"[wrapper.py] sendCommand() a échoué ({exc})", file=sys.stderr)
         return "DROP_LEN_MISMATCH"
 
+    # Mode naïf : envoi sans attendre la réponse NOS3 → débit maximal
+    if _FUZZ_MODE == "naive":
+        return "NAIVE_OK"
+
     return _poll_log(start, msgid_hex)
+
+
+_SEQ_LOG = "/tmp/maya_sequences.jsonl"
+_SEQ_MAX  = 50   # garde les 50 dernières séquences
+
+def _log_sequence(data: dict) -> None:
+    """Écrit la séquence dans un fichier tournant (50 lignes max)."""
+    try:
+        try:
+            with open(_SEQ_LOG) as f:
+                lines = f.readlines()
+        except FileNotFoundError:
+            lines = []
+        lines.append(json.dumps(data) + "\n")
+        with open(_SEQ_LOG, "w") as f:
+            f.writelines(lines[-_SEQ_MAX:])
+    except OSError:
+        pass
 
 
 def main() -> int:
@@ -175,6 +198,7 @@ def main() -> int:
         print(json.dumps({"verdict": "DROP_LEN_MISMATCH"}))
         return 0
 
+    _log_sequence(data)
     commands = data.get("commands", [])
     if not commands:
         print(json.dumps({"verdict": "DROP_LEN_MISMATCH"}))

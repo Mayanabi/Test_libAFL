@@ -1,1 +1,20 @@
-/target
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Rust
+target/
+
+# Logs / corpus fuzzing
+*.log
+corpus/
+crashes/
+
+# Docker / NOS3
+*.env
+
+# Éditeurs
+.vscode/
+.idea/

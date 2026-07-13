@@ -10,24 +10,23 @@ use libafl::{
 use libafl_bolts::{tuples::Handle, Named};
 use libafl_bolts::tuples::MatchNameRef;
 
+use crate::fsm::SharedFsm;
 use crate::input::CcsdsSequenceInput;
 
-/// Juge "intéressant" tout couple (tc_name, verdict) jamais observé auparavant.
-///
-/// Pourquoi pas verdict seul ?
-///   NOS3 ne produit que ~5 verdicts distincts (OK / DROP_* / TIMEOUT / CRASH).
-///   Dès que les premières seeds couvrent ces 5 cas, plus rien n'est "nouveau"
-///   et le corpus ne grandit plus. En incluant le nom de la TC dans la clé on
-///   distingue "CFE_ES_NOOP_CC:OK" de "CFE_TIME_NOOP_CC:OK" — le corpus peut
-///   alors croître jusqu'à N_TC × N_verdicts entrées utiles.
 pub struct Nos3Feedback {
-    seen: HashSet<String>,
+    seen:          HashSet<String>,
     stdout_handle: Handle<StdOutObserver>,
+    /// En mode stateful : FSM partagée à faire avancer après chaque verdict.
+    fsm:           Option<SharedFsm>,
 }
 
 impl Nos3Feedback {
     pub fn new(stdout_handle: Handle<StdOutObserver>) -> Self {
-        Self { seen: HashSet::new(), stdout_handle }
+        Self { seen: HashSet::new(), stdout_handle, fsm: None }
+    }
+
+    pub fn new_with_fsm(stdout_handle: Handle<StdOutObserver>, fsm: SharedFsm) -> Self {
+        Self { seen: HashSet::new(), stdout_handle, fsm: Some(fsm) }
     }
 
     fn extract_verdict(output: &[u8]) -> Option<String> {
@@ -66,7 +65,20 @@ where
             .map(|c| c.tc_name.as_str())
             .unwrap_or("UNKNOWN");
 
-        // Clé = "CFE_ES_RESTART_CC:DROP_LEN_MISMATCH" — granularité par commande
+        // Mode stateful : avance la FSM selon le verdict reçu.
+        // Le premier verdict dans une séquence multi-commandes suffit pour
+        // les cas single-command du mode stateful.
+        if let Some(fsm) = &self.fsm {
+            // Pour une séquence multi-commandes, on avance pour chaque commande
+            // en utilisant la partie du verdict qui lui correspond.
+            let verdicts: Vec<&str> = verdict.split('|').collect();
+            for (i, cmd) in input.commands.iter().enumerate() {
+                let v = verdicts.get(i).copied().unwrap_or("UNKNOWN");
+                fsm.lock().unwrap().advance(&cmd.tc_name, v);
+            }
+        }
+
+        // Clé corpus = "CFE_ES_RESTART_CC:DROP_LEN_MISMATCH"
         let key = format!("{tc_name}:{verdict}");
         Ok(self.seen.insert(key))
     }

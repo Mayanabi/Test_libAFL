@@ -50,11 +50,12 @@ pub fn filter(cat: Catalogue, config: &crate::config::FuzzConfig) -> Catalogue {
 
     cat.into_iter()
         .filter(|(_, entry)| {
-            // Filtre par app (ignoré si mode = All)
-            if config.mode != FuzzMode::All && !config.apps.is_empty() {
-                if !config.apps.contains(&entry.app) {
-                    return false;
-                }
+            // Filtre par app uniquement pour single_app et multi_app.
+            // All, CrossApp, Naive et Stateful utilisent tout le catalogue.
+            let apply_app_filter = matches!(config.mode, FuzzMode::SingleApp | FuzzMode::MultiApp)
+                && !config.apps.is_empty();
+            if apply_app_filter && !config.apps.contains(&entry.app) {
+                return false;
             }
             // Filtre optionnel par priorité
             if let Some(prio) = &config.fuzz_priority {

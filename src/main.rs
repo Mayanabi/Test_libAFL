@@ -1,5 +1,6 @@
 mod catalogue;
 mod config;
+mod fsm;
 mod generator;
 mod input;
 mod executor;
@@ -7,7 +8,7 @@ mod feedback;
 
 use std::{borrow::Cow, path::PathBuf, time::Duration};
 
-use generator::CatalogueGenerator;
+use generator::{CatalogueGenerator, StatefulGenerator};
 use input::{
     ArgValueMutator, CcsdsSequenceInput,
     CommandReorderMutator, DelayMutator,
@@ -35,7 +36,6 @@ use libafl_bolts::{
     tuples::{tuple_list, Handled},
 };
 
-/// Lance un one-liner Python et retourne sa sortie stdout (trimmed).
 fn python_oneliner(code: &str, label: &str) -> String {
     let out = std::process::Command::new("python3")
         .args(["-c", code])
@@ -59,8 +59,6 @@ fn resolve_nos3_ip() -> String {
     )
 }
 
-/// Récupère le PID initial de core-cpu1 une seule fois.
-/// Évite 2 appels `docker exec` par exécution dans wrapper.py (50–500ms chacun).
 fn resolve_cfs_pid() -> String {
     python_oneliner(
         "import sys; sys.path.insert(0, '/home/jstar/Desktop/fuzzer/input_generator_dev'); \
@@ -70,29 +68,46 @@ fn resolve_cfs_pid() -> String {
 }
 
 pub fn main() {
-    // Résolus une seule fois — évitent 2 × docker exec par exécution dans wrapper.py
-    let nos3_ip  = resolve_nos3_ip();
-    let cfs_pid  = resolve_cfs_pid();
+    // ── Config ────────────────────────────────────────────────────────────────
+    let cfg = config::load("fuzz_config.toml");
 
-    // --- Observer stdout : capture le verdict JSON imprimé par wrapper.py ---
+    let fuzz_mode_str = match cfg.mode {
+        config::FuzzMode::Naive    => "naive",
+        config::FuzzMode::Stateful => "stateful",
+        _                          => "normal",
+    };
+
+    // ── Résolution IP / PID (une seule fois) ─────────────────────────────────
+    let nos3_ip = resolve_nos3_ip();
+    let cfs_pid = resolve_cfs_pid();
+
+    // ── Observer + Executor ───────────────────────────────────────────────────
     let stdout_observer = StdOutObserver::new_piped(Cow::Borrowed("stdout"))
         .expect("Failed to create stdout observer");
     let stdout_handle = stdout_observer.handle();
 
-    // --- Executor réel vers NOS3 (wrapper Python + subprocess) ---
     let nos3_executor = Nos3Executor::new(
         "wrapper.py",
-        Duration::from_secs(120), // > _RESTART_WAIT (90s) pour laisser wrapper.py attendre NOS3
+        Duration::from_secs(120),
         stdout_handle.clone(),
         nos3_ip,
         cfs_pid,
+        fuzz_mode_str,
     );
 
-    // --- Feedback : "intéressant" = verdict NOS3 jamais vu auparavant ---
-    // CrashFeedback est le critère secondaire (objective) : retour non-zéro du wrapper.
+    // ── Feedback ──────────────────────────────────────────────────────────────
     let mut objective = CrashFeedback::new();
-    let mut feedback  = Nos3Feedback::new(stdout_handle.clone());
 
+    // En mode stateful, le feedback partage la FSM avec le générateur.
+    let (shared_fsm, mut feedback) = if cfg.mode == config::FuzzMode::Stateful {
+        let fsm = fsm::load_shared(&cfg.fsm_dir);
+        let fb  = Nos3Feedback::new_with_fsm(stdout_handle.clone(), fsm.clone());
+        (Some(fsm), fb)
+    } else {
+        (None, Nos3Feedback::new(stdout_handle.clone()))
+    };
+
+    // ── State, manager, fuzzer ────────────────────────────────────────────────
     let mut state = StdState::new(
         StdRand::with_seed(current_nanos()),
         InMemoryCorpus::<CcsdsSequenceInput>::new(),
@@ -102,10 +117,10 @@ pub fn main() {
     )
     .unwrap();
 
-    let mon      = SimpleMonitor::new(|s| println!("{s}"));
-    let mut mgr  = SimpleEventManager::new(mon);
-    let scheduler = QueueScheduler::new();
-    let mut fuzzer = StdFuzzer::new(scheduler, feedback, objective);
+    let mon         = SimpleMonitor::new(|s| println!("{s}"));
+    let mut mgr     = SimpleEventManager::new(mon);
+    let scheduler   = QueueScheduler::new();
+    let mut fuzzer  = StdFuzzer::new(scheduler, feedback, objective);
 
     let mut executor = nos3_executor.into_executor(
         tuple_list!(stdout_observer),
@@ -113,11 +128,7 @@ pub fn main() {
         None,
     );
 
-    // --- Config de campagne : fuzz_config.toml ---
-    let cfg = config::load("fuzz_config.toml");
-
-    // --- Catalogue NOS3 filtré selon la config ---
-    // catalogue_dump.json produit par : python3 dump_catalogue.py
+    // ── Catalogue ─────────────────────────────────────────────────────────────
     let raw_cat = catalogue::load("catalogue_dump.json");
     let cat     = catalogue::filter(raw_cat, &cfg);
 
@@ -128,26 +139,46 @@ pub fn main() {
             cfg.apps, cfg.fuzz_priority
         );
     }
-    let base_gen = CatalogueGenerator::new(cat);
-    let mut generator = if cfg.mode == config::FuzzMode::CrossApp {
-        base_gen.with_cross_app(cfg.cross_app_min_tc, cfg.cross_app_max_tc)
-    } else {
-        base_gen
-    };
-    state
-        .generate_initial_inputs(&mut fuzzer, &mut executor, &mut generator, &mut mgr, cfg.seed_count)
-        .expect("Failed to generate the initial corpus");
 
-    // --- Mutateurs ---
-    // Ordonnés du plus sémantique au plus aléatoire.
-    // HavocScheduledMutator en choisit plusieurs par exécution aléatoirement.
+    // ── Génération des seeds initiales selon le mode ──────────────────────────
+    match cfg.mode {
+        config::FuzzMode::Stateful => {
+            let fsm = shared_fsm.expect("FSM should be loaded for stateful mode");
+            let mut gen = StatefulGenerator::new(cat, fsm);
+            state
+                .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, cfg.seed_count)
+                .expect("Failed to generate initial corpus");
+        }
+        config::FuzzMode::Naive => {
+            let mut gen = CatalogueGenerator::new(cat)
+                .with_naive_batch(cfg.naive_batch_size);
+            state
+                .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, cfg.seed_count)
+                .expect("Failed to generate initial corpus");
+        }
+        config::FuzzMode::CrossApp => {
+            let mut gen = CatalogueGenerator::new(cat)
+                .with_cross_app(cfg.cross_app_min_tc, cfg.cross_app_max_tc);
+            state
+                .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, cfg.seed_count)
+                .expect("Failed to generate initial corpus");
+        }
+        _ => {
+            let mut gen = CatalogueGenerator::new(cat);
+            state
+                .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, cfg.seed_count)
+                .expect("Failed to generate initial corpus");
+        }
+    }
+
+    // ── Mutateurs ─────────────────────────────────────────────────────────────
     let mutators = tuple_list!(
-        FcWalkMutator,          // FC ±1..16 ou aléatoire → nouveau handler cFS
-        IntBoundaryMutator,     // 0 / max / max/2 / frontières signed pour UINT/INT
-        FloatSpecialMutator,    // NaN / Inf / 0.0 / max pour FLOAT
-        CommandReorderMutator,  // swap deux commandes → teste l'ordre (cross_app)
-        ArgValueMutator,        // havoc byte-level pour STRING/BLOCK et chaos général
-        DelayMutator,           // explore l'impact des délais inter-commandes
+        FcWalkMutator,
+        IntBoundaryMutator,
+        FloatSpecialMutator,
+        CommandReorderMutator,
+        ArgValueMutator,
+        DelayMutator,
     );
 
     let mutator_scheduler = HavocScheduledMutator::new(mutators);
