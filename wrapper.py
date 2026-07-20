@@ -1,19 +1,11 @@
 #!/usr/bin/env python3
 """
-WRAPPER.PY — Maya 3.0 (branché sur CmdSender + maya_feedback.log)
 
 Reçoit sur stdin le JSON CcsdsSequenceInput sérialisé par Nos3Executor.
-Envoie TOUTES les commandes de la séquence vers NOS3/cFS via UDP, dans l'ordre,
-en respectant les délais inter-commandes.
+
 Répond sur stdout une ligne JSON {"verdict": "<v1>|<v2>|..."} où chaque vi
 est le verdict NOS3 pour la commande i.
 
-En mode single_app/all : séquence d'une commande → verdict simple "OK".
-En mode cross_app      : séquence multi-apps → verdict combiné "OK|DROP_SB_ERROR|OK".
-Le verdict combiné est traité comme une chaîne unique par Nos3Feedback — chaque
-nouvel ordre/combinaison de verdicts est donc considéré intéressant.
-
-Prérequis : container Docker "sc01-nos-fsw" actif (NOS3 lancé).
 """
 
 import json
@@ -33,7 +25,7 @@ import ProcessMonitoring  # noqa: E402  # type: ignore[import-not-found]
 
 # Répertoire du repo NOS3 (contient le Makefile : make stop / make launch)
 _NOS3_DIR      = "/home/jstar/Desktop/github-nos3"
-# Log écrit par ci_lab_app.c (chemin hardcodé côté cFS, voir ci_lab_app.c:186)
+# Log écrit par ci_lab_app.c 
 _LOG_PATH      = "/home/jstar/Desktop/github-nos3/maya_feedback.log"
 _POLL_INTERVAL   = 0.005  # 5 ms entre chaque lecture du log
 _POLL_TIMEOUT    = 1.0    # 1 s max avant de déclarer TIMEOUT (executor timeout = 5 s)
@@ -45,8 +37,8 @@ _MAKE_TIMEOUT    = 180.0  # temps max pour chacun de make stop / make launch
 _ENDIAN = {"BIG": "BIG_ENDIAN", "LITTLE": "LITTLE_ENDIAN"}
 
 # IP et PID résolus une seule fois par Rust au démarrage, passés via env vars.
-_NOS3_IP   = os.environ.get("NOS3_IP")      or CmdSender.getDockerIP()
-_INIT_PID  = os.environ.get("NOS3_CFS_PID") or ProcessMonitoring.get_cfs_pid()
+_NOS3_IP   = CmdSender.getDockerIP()
+_INIT_PID  = ProcessMonitoring.get_cfs_pid()
 _FUZZ_MODE = os.environ.get("FUZZ_MODE", "normal")  # si pas configuré par défaut c normal
 
 # Socket UDP réutilisé pour toute la durée du processus.
@@ -76,21 +68,10 @@ def _log_offset() -> int:
 
 
 def _poll_log(start: int, msgid_hex: str) -> str:
-    """
-    Attend une ligne dans le log après la position `start` contenant `msgid_hex`.
 
-    Paramètre msgid_hex : ex "0x1806" (4 chiffres hex majuscules). Si vide,
-    retourne la première nouvelle ligne trouvée (APID corrompu par le fuzzer).
-
-    ci_lab_app.c appelle fflush() après chaque fprintf → pas de buffering à gérer.
-    Format MsgId dans le log : 0x%04X (OK/DROP_SB_ERROR) ou 0x%02X%02X
-    (DROP_LEN_MISMATCH/DROP_BAD_SIZE) — les deux produisent la même chaîne pour
-    un APID 16 bits.
-    """
-    # Fichier ouvert UNE seule fois — on utilise readline() en boucle (pattern
-    # tail -f). Évite des centaines d'appels open()/close() par exécution.
-    # readline() retourne '' à EOF sans bloquer ; on dort _POLL_INTERVAL puis
-    # on réessaie : quand ci_lab écrit une nouvelle ligne, elle devient visible.
+    # ce qui permet à wrapper.py de renvoyer un verdict exploitable à Rust pour ensuite 
+    # alimenter toute la logique de fuzzing 
+ 
     deadline = time.monotonic() + _POLL_TIMEOUT
     try:
         with open(_LOG_PATH, "r", errors="replace") as f:
@@ -122,10 +103,10 @@ def _wait_for_nos3_ready() -> None:
 
     Appelée dès qu'un crash/restart est détecté, AVANT de retourner le verdict
     à LibAFL. LibAFL reste bloqué sur cette unique invocation de wrapper.py
-    jusqu'au retour de cFS — les tests suivants ne repartent qu'une fois NOS3
+    jusqu'au retour de cFS ===> les tests d'aprés ne repartent qu'une fois NOS3
     prêt, dans un état reproductible.
     """
-    print("[wrapper.py] cFS crash — redémarrage NOS3 (make stop && make launch)...",
+    print("[wrapper.py] cFS crash : redémarrage NOS3 (make stop - make launch)...",
           file=sys.stderr)
     for target in ("stop", "launch"):
         try:
@@ -139,7 +120,7 @@ def _wait_for_nos3_ready() -> None:
             print(f"[wrapper.py] 'make {target}' a dépassé {_MAKE_TIMEOUT}s",
                   file=sys.stderr)
 
-    print(f"[wrapper.py] make launch terminé — attente cFS (max {_RESTART_WAIT}s)...",
+    print(f"[wrapper.py] make launch terminé : attente cFS (max {_RESTART_WAIT}s)...",
           file=sys.stderr)
     deadline = time.monotonic() + _RESTART_WAIT
     while time.monotonic() < deadline:
@@ -157,9 +138,6 @@ def _send_and_wait(cmd: dict) -> str:
     """
     Envoie cmd vers NOS3 et retourne le verdict NOS3 depuis le log.
 
-    Si sendCommand() lève une exception (ex: VALUE corrompu → int() échoue
-    dans convertIntToBytes), on retourne DROP_LEN_MISMATCH : le paquet n'a
-    pas pu être construit, comportement équivalent à un drop côté NOS3.
     """
     args = [_to_sender_arg(a) for a in cmd["args"]]
     port = int(cmd["port"])

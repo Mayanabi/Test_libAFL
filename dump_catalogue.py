@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
 """
-dump_catalogue.py — Maya 3.0
 
 Exporte le catalogue NOS3 (nos3_commands_reference.yaml) en JSON plat
 pour que Rust puisse le charger via serde_json dans src/catalogue.rs.
 
-Usage :
-    python3 dump_catalogue.py [chemin_sortie]
-    (défaut : catalogue_dump.json dans le répertoire courant)
 """
 
 import json
