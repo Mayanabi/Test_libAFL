@@ -1,5 +1,7 @@
 use serde::Deserialize;
 
+use crate::input::MutatorKind;
+
 #[derive(Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum FuzzMode {
@@ -47,6 +49,14 @@ pub struct FuzzConfig {
     /// Répertoire contenant les FSM YAMLs (mode stateful uniquement)
     #[serde(default = "default_fsm_dir")]
     pub fsm_dir: String,
+
+    /// Mutateur(s) actifs pendant le fuzzing, choisis dans la liste proposée
+    /// (voir MutatorKind). Une seule entrée → ce mutateur est utilisé pour
+    /// tous les paquets mutés. Plusieurs entrées → un mutateur est tiré au
+    /// hasard dans cette liste à chaque paquet muté. Absent → tous les
+    /// mutateurs disponibles sont utilisés (tirage aléatoire parmi tous).
+    #[serde(default = "default_mutators")]
+    pub mutators: Vec<MutatorKind>,
 }
 
 fn default_seed_count()  -> usize  { 8 }
@@ -56,6 +66,7 @@ fn default_cross_max()   -> usize  { 5 }
 fn default_fsm_dir()     -> String {
     "/home/jstar/Desktop/maya3/patterns/stateful".to_string()
 }
+fn default_mutators()    -> Vec<MutatorKind> { MutatorKind::ALL.to_vec() }
 
 pub fn load(path: &str) -> FuzzConfig {
     let raw = std::fs::read_to_string(path)

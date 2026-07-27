@@ -1,5 +1,7 @@
 use std::borrow::Cow;
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use libafl::{
     executors::ExitKind,
@@ -18,15 +20,23 @@ pub struct Nos3Feedback {
     stdout_handle: Handle<StdOutObserver>,
     /// En mode stateful : FSM partagée à faire avancer après chaque verdict.
     fsm:           Option<SharedFsm>,
+    /// Mis à true par le handler Ctrl+C (main.rs) quand la séquence en cours
+    /// vient d'être tuée par nous — son stdout est garbage/incomplet, pas un
+    /// vrai signal NOS3. Consommé ici pour ne jamais l'ajouter au corpus.
+    killed:        Arc<AtomicBool>,
 }
 
 impl Nos3Feedback {
-    pub fn new(stdout_handle: Handle<StdOutObserver>) -> Self {
-        Self { seen: HashSet::new(), stdout_handle, fsm: None }
+    pub fn new(stdout_handle: Handle<StdOutObserver>, killed: Arc<AtomicBool>) -> Self {
+        Self { seen: HashSet::new(), stdout_handle, fsm: None, killed }
     }
 
-    pub fn new_with_fsm(stdout_handle: Handle<StdOutObserver>, fsm: SharedFsm) -> Self {
-        Self { seen: HashSet::new(), stdout_handle, fsm: Some(fsm) }
+    pub fn new_with_fsm(
+        stdout_handle: Handle<StdOutObserver>,
+        fsm: SharedFsm,
+        killed: Arc<AtomicBool>,
+    ) -> Self {
+        Self { seen: HashSet::new(), stdout_handle, fsm: Some(fsm), killed }
     }
 
     fn extract_verdict(output: &[u8]) -> Option<String> {
@@ -51,6 +61,12 @@ where
         observers: &OT,
         _exit_kind: &ExitKind,
     ) -> Result<bool, Error> {
+        // Séquence tuée par le handler Ctrl+C (annulation) — pas un verdict
+        // NOS3 exploitable, on ne l'ajoute jamais au corpus.
+        if self.killed.swap(false, Ordering::SeqCst) {
+            return Ok(false);
+        }
+
         let stdout_observer: &StdOutObserver = observers
             .get(&self.stdout_handle)
             .ok_or_else(|| Error::illegal_state("stdout observer not found"))?;

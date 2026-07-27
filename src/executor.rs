@@ -1,6 +1,7 @@
 use std::{
     io::Write,
     process::{Child, Command, Stdio},
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
@@ -23,6 +24,10 @@ pub struct Nos3Executor {
     pub cfs_pid:   String,
     /// "naive" | "stateful" | "normal" — transmis à wrapper.py via FUZZ_MODE
     pub fuzz_mode: String,
+    /// PID du wrapper.py actuellement en cours d'exécution (mis à jour à
+    /// chaque spawn_child). Partagé avec le handler Ctrl+C de main.rs pour
+    /// pouvoir tuer la séquence en cours sur annulation.
+    pub current_pid: Arc<Mutex<Option<u32>>>,
 }
 
 impl Nos3Executor {
@@ -33,6 +38,7 @@ impl Nos3Executor {
         nos3_ip: impl Into<String>,
         cfs_pid: impl Into<String>,
         fuzz_mode: impl Into<String>,
+        current_pid: Arc<Mutex<Option<u32>>>,
     ) -> Self {
         Self {
             wrapper_script: wrapper_script.into(),
@@ -41,6 +47,7 @@ impl Nos3Executor {
             nos3_ip:   nos3_ip.into(),
             cfs_pid:   cfs_pid.into(),
             fuzz_mode: fuzz_mode.into(),
+            current_pid,
         }
     }
 }
@@ -60,6 +67,8 @@ impl CommandConfigurator<Child> for Nos3Executor {
         let mut child = command.spawn().map_err(|e| {
             Error::illegal_state(format!("failed to spawn wrapper: {e}"))
         })?;
+
+        *self.current_pid.lock().unwrap() = Some(child.id());
 
         // take() retire stdin du Child et le drop implicitement à la fin du bloc
         // → Python voit EOF immédiatement après l'écriture, sans attendre que

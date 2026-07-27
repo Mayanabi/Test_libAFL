@@ -53,3 +53,33 @@ naive_batch_size = 10
 # Répertoire contenant les FSM YAMLs générés pour chaque app NOS3.
 #
 fsm_dir = "/home/jstar/Desktop/maya3/patterns/stateful"
+
+# ─── MUTATEURS ──────────────────────────────────────────────────────────────
+# Optionnel — commenter (ou supprimer) pour utiliser tous les mutateurs
+# disponibles (tirage aléatoire parmi tous, à chaque paquet muté).
+#
+# Une seule entrée  → ce mutateur est utilisé pour TOUS les paquets mutés.
+# Plusieurs entrées → un mutateur est tiré au hasard dans cette liste,
+#                      séparément pour chaque paquet muté.
+#
+# Valeurs possibles :
+#   arg_value       → havoc byte-level (bit flip/byte random/insert/delete/copy)
+#   fc_walk         → marche aléatoire autour du Function Code (args[3])
+#   int_boundary    → valeurs frontières pour les args UINT/INT
+#   string_special  → chaînes spéciales (format string, path traversal, ...) pour STRING
+#   command_reorder → échange l'ordre de deux commandes de la séquence
+#   delay           → fait varier delay_min_ms / delay_max_ms
+#   version         → champ Version du primary header CCSDS (3 bits)
+#   packet_type     → champ Type du primary header CCSDS (TC/TM, 1 bit)
+#   sec_hdr_flag    → champ Secondary Header Flag du primary header CCSDS (1 bit)
+#   apid            → champ APID du primary header CCSDS (11 bits, routage cFS)
+#   seq_flags       → champ Sequence Flags du primary header CCSDS (2 bits)
+#   seq_count       → champ Sequence Count du primary header CCSDS (14 bits)
+#
+# Exemple (un seul mutateur, toujours le même) :
+#   mutators = ["apid"]
+#
+# Exemple (plusieurs, tirage aléatoire à chaque paquet) :
+#   mutators = ["arg_value", "fc_walk", "int_boundary", "apid", "seq_count"]
+#
+mutators = ["arg_value", "fc_walk", "int_boundary", "string_special", "command_reorder", "delay", "version", "packet_type", "sec_hdr_flag", "apid", "seq_flags", "seq_count"]

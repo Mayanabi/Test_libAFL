@@ -46,7 +46,6 @@ fn build_command(name: &str, tpl: &CatalogueEntry, step: i32) -> CcsdsCommand {
         delay_min_ms: 0,
         delay_max_ms: 0,
         args:         tpl.args.iter().map(convert_arg).collect(),
-        port:         tpl.port,
         target:       tpl.target.clone(),
         mutation:     "havoc".into(),
         replay:       false,
