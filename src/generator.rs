@@ -37,7 +37,9 @@ fn convert_arg(a: &CatalogueArg) -> CcsdsArg {
     }
 }
 
-fn build_command(name: &str, tpl: &CatalogueEntry, step: i32) -> CcsdsCommand {
+/// Construit une CcsdsCommand à partir d'un template du catalogue — exposé
+/// pour être réutilisé par le binaire send_packet (envoi manuel hors séquence).
+pub fn build_command(name: &str, tpl: &CatalogueEntry, step: i32) -> CcsdsCommand {
     CcsdsCommand {
         step,
         tc_name:      name.to_owned(),
@@ -47,6 +49,7 @@ fn build_command(name: &str, tpl: &CatalogueEntry, step: i32) -> CcsdsCommand {
         delay_max_ms: 0,
         args:         tpl.args.iter().map(convert_arg).collect(),
         target:       tpl.target.clone(),
+        port:         tpl.port,
         mutation:     "havoc".into(),
         replay:       false,
     }

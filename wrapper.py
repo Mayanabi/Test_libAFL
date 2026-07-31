@@ -108,19 +108,39 @@ def _wait_for_nos3_ready() -> None:
     """
     print("[wrapper.py] cFS crash : redémarrage NOS3 (make stop - make launch)...",
           file=sys.stderr)
-    for target in ("stop", "launch"):
-        try:
-            subprocess.run(
-                ["make", target],
-                cwd=_NOS3_DIR,
-                timeout=_MAKE_TIMEOUT,
-                check=False,
-            )
-        except subprocess.TimeoutExpired:
-            print(f"[wrapper.py] 'make {target}' a dépassé {_MAKE_TIMEOUT}s",
-                  file=sys.stderr)
 
-    print(f"[wrapper.py] make launch terminé : attente cFS (max {_RESTART_WAIT}s)...",
+    # make stop reste bloquant et sans fenêtre : on doit attendre la fin du
+    # nettoyage avant de relancer, sinon make launch peut démarrer sur un
+    # état encore à moitié arrêté (conflits de noms de conteneurs, etc.).
+    try:
+        subprocess.run(
+            ["make", "stop"],
+            cwd=_NOS3_DIR,
+            timeout=_MAKE_TIMEOUT,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        print(f"[wrapper.py] 'make stop' a dépassé {_MAKE_TIMEOUT}s",
+              file=sys.stderr)
+
+    # make launch est lancé dans un gnome-terminal dédié (comme le fait le
+    # script de lancement multi-VM de l'équipe) plutôt qu'en subprocess nu —
+    # ça donne à make launch sa propre fenêtre visible, avec un geste
+    # d'ouverture explicite plutôt qu'un appel silencieux en tâche de fond.
+    # gnome-terminal retourne dès que la fenêtre est demandée (asynchrone) :
+    # on ne compte pas sur cet appel pour savoir quand cFS est prêt, le
+    # polling ci-dessous s'en charge indépendamment.
+    try:
+        subprocess.run(
+            ["gnome-terminal", f"--working-directory={_NOS3_DIR}", "--", "make", "launch"],
+            timeout=_MAKE_TIMEOUT,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        print(f"[wrapper.py] 'gnome-terminal -- make launch' a dépassé {_MAKE_TIMEOUT}s",
+              file=sys.stderr)
+
+    print(f"[wrapper.py] make launch lancé : attente cFS (max {_RESTART_WAIT}s)...",
           file=sys.stderr)
     deadline = time.monotonic() + _RESTART_WAIT
     while time.monotonic() < deadline:

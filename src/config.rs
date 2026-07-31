@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::input::MutatorKind;
+use crate::input::{FixedField, MutatorKind};
 
 #[derive(Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -76,4 +76,24 @@ pub fn load(path: &str) -> FuzzConfig {
         ));
     toml::from_str(&raw)
         .unwrap_or_else(|e| panic!("TOML invalide dans {path}: {e}"))
+}
+
+/// Fichier passé via `--fixed-fields <path>` : liste de champs à figer en
+/// post-processing, juste après la mutation automatique (voir
+/// input::FixedFieldsMutator / ChainMutator).
+#[derive(Deserialize, Debug)]
+struct FixedFieldsFile {
+    #[serde(default)]
+    fixed: Vec<FixedField>,
+}
+
+/// Charge un fichier `--fixed-fields`. Panics avec un message clair si le
+/// fichier est absent ou malformé (contrairement à `load()`, ce fichier est
+/// optionnel côté CLI — l'appel n'a lieu que si `--fixed-fields` a été passé).
+pub fn load_fixed_fields(path: &str) -> Vec<FixedField> {
+    let raw = std::fs::read_to_string(path)
+        .unwrap_or_else(|e| panic!("Impossible de lire {path}: {e}"));
+    let parsed: FixedFieldsFile = toml::from_str(&raw)
+        .unwrap_or_else(|e| panic!("TOML invalide dans {path}: {e}"));
+    parsed.fixed
 }

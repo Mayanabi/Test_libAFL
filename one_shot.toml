@@ -1,0 +1,29 @@
+# ─── one_shot.toml — paquet unique à envoyer à la main ───────────────────────
+#
+# Usage : cargo run --bin send_packet
+#         (ou cargo run --bin send_packet -- chemin/vers/autre_spec.toml)
+#
+# Envoie CE paquet une seule fois, directement à NOS3, hors séquence et hors
+# boucle LibAFL — pratique pour tester un paquet fait main (faux flags, valeur
+# précise sur un champ) sans attendre le fuzzing automatique.
+
+# Template de départ, cherché dans catalogue_dump.json : fournit le port, le
+# target ("CFS") et la liste des args par défaut (avec leurs valeurs nominales).
+tc_name = "NOVATEL_OEM615_DISABLE_CC"
+
+# Délais optionnels avant l'envoi (par défaut : 0).
+# delay_min_ms = 0
+# delay_max_ms = 0
+
+# Overrides : liste des champs à modifier avant l'envoi. `name` correspond au
+# nom NAME tel qu'il apparaît dans catalogue_dump.json (ID, SEQ, LEN, FC,
+# CHECKSUM, ou un argument applicatif du TC). `value` est envoyée telle
+# quelle (ex: "0xFF", "1234", "toto").
+
+[[overrides]]
+name  = "FC"
+value = "0xFF"
+
+# [[overrides]]
+# name  = "ID"
+# value = "0x1806"

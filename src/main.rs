@@ -1,10 +1,4 @@
-mod catalogue;
-mod config;
-mod fsm;
-mod generator;
-mod input;
-mod executor;
-mod feedback;
+use maya_libafl_poc::{catalogue, config, fsm, generator, input, executor, feedback};
 
 use std::{
     borrow::Cow,
@@ -18,7 +12,7 @@ use std::{
 };
 
 use generator::{CatalogueGenerator, StatefulGenerator};
-use input::{CcsdsSequenceInput, SelectedMutator};
+use input::{CcsdsSequenceInput, SelectedMutator, ChainMutator, FixedFieldsMutator};
 use executor::Nos3Executor;
 use feedback::Nos3Feedback;
 
@@ -135,6 +129,23 @@ fn restart_nos3() {
 pub fn main() {
     // ── Config ────────────────────────────────────────────────────────────────
     let cfg = config::load("fuzz_config.toml");
+
+    // --fixed-fields <path> (optionnel) : post-processing appliqué après
+    // chaque mutation automatique. Absent → aucun override (fuzzing 100%
+    // automatique). Pour l'activer : cargo run -- --fixed-fields fixed_fields.toml
+    let cli_args: Vec<String> = std::env::args().collect();
+    let fixed_fields_path = cli_args.iter()
+        .position(|a| a == "--fixed-fields")
+        .and_then(|i| cli_args.get(i + 1))
+        .cloned();
+    let fixed_fields = match &fixed_fields_path {
+        Some(path) => {
+            let fields = config::load_fixed_fields(path);
+            eprintln!("[main] --fixed-fields {path} : {} champ(s) figé(s) actif(s)", fields.len());
+            fields
+        }
+        None => Vec::new(),
+    };
 
     let fuzz_mode_str = match cfg.mode {
         config::FuzzMode::Naive    => "naive",
@@ -281,8 +292,10 @@ pub fn main() {
     // ── Mutateurs ─────────────────────────────────────────────────────────────
     // Choisis via `mutators` dans fuzz_config.toml : un seul → toujours celui-là ;
     // plusieurs → un tiré au hasard à chaque paquet muté (voir SelectedMutator).
-    let selected_mutator = SelectedMutator::new(cfg.mutators.clone());
-    let mut stages = tuple_list!(StdMutationalStage::new(selected_mutator));
+    let selected_mutator     = SelectedMutator::new(cfg.mutators.clone());
+    let fixed_fields_mutator = FixedFieldsMutator::new(fixed_fields);
+    let combined_mutator     = ChainMutator::new(selected_mutator, fixed_fields_mutator);
+    let mut stages = tuple_list!(StdMutationalStage::new(combined_mutator));
 
     // Boucle manuelle (au lieu de fuzzer.fuzz_loop) pour pouvoir réagir au
     // Ctrl+C : annuler juste la séquence en cours et continuer, ou arrêter

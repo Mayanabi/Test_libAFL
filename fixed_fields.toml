@@ -1,0 +1,22 @@
+# ─── fixed_fields.toml — champs figés en post-processing ─────────────────────
+#
+# Actif UNIQUEMENT si passé explicitement au lancement :
+#   cargo run -- --fixed-fields fixed_fields.toml
+#
+# Sans ce flag, aucun override n'est appliqué — le fuzzing reste 100%
+# automatique (mutators de fuzz_config.toml). Avec le flag, chaque entrée
+# ci-dessous est appliquée APRÈS la mutation automatique, sur chaque paquet
+# généré — pratique pour figer un champ (ex: garder un FC valide) pendant
+# que le reste continue à être muté normalement.
+#
+# tc_name est optionnel : absent → s'applique à toutes les commandes de la
+# séquence ; présent → seulement aux commandes portant ce tc_name.
+
+[[fixed]]
+tc_name = "NOVATEL_OEM615_DISABLE_CC"
+field   = "FC"
+value   = "0x05"
+
+# [[fixed]]
+# field = "CHECKSUM"
+# value = "0x00"

@@ -85,6 +85,7 @@ pub struct CcsdsCommand {
     pub delay_max_ms: u32,
     pub args:         Vec<CcsdsArg>,
     pub target:       String,
+    pub port:         u16,
     pub mutation:     String,
     pub replay:       bool,
 }
@@ -681,6 +682,100 @@ impl SelectedMutator {
             seq_count:       SeqCountMutator,
         }
     }
+}
+
+// ─── FixedFieldsMutator (post-processing, --fixed-fields) ───────────────────
+
+/// Une entrée de `fixed_fields.toml` : force `field` (nom d'arg, ex: "FC",
+/// "ID", ou un arg applicatif) à `value` — sur toutes les commandes si
+/// `tc_name` est absent, sinon seulement sur celles qui portent ce tc_name.
+#[derive(Deserialize, Debug, Clone)]
+pub struct FixedField {
+    pub tc_name: Option<String>,
+    pub field:   String,
+    pub value:   String,
+}
+
+/// Fige certains champs à une valeur précise, en post-processing juste après
+/// la mutation automatique (voir ChainMutator). Activé uniquement si
+/// `--fixed-fields <path>` est passé au lancement — sinon `fields` est vide et
+/// ce mutateur est un no-op (fuzzing 100% automatique par défaut).
+pub struct FixedFieldsMutator {
+    fields: Vec<FixedField>,
+}
+
+impl FixedFieldsMutator {
+    pub fn new(fields: Vec<FixedField>) -> Self {
+        Self { fields }
+    }
+}
+
+impl<S> Mutator<CcsdsSequenceInput, S> for FixedFieldsMutator {
+    fn mutate(&mut self, _state: &mut S, input: &mut CcsdsSequenceInput) -> Result<MutationResult, Error> {
+        if self.fields.is_empty() {
+            return Ok(MutationResult::Skipped);
+        }
+
+        let mut changed = false;
+        for fixed in &self.fields {
+            for cmd in input.commands.iter_mut() {
+                if let Some(tc) = &fixed.tc_name {
+                    if tc != &cmd.tc_name { continue; }
+                }
+                for arg in cmd.args.iter_mut() {
+                    if arg.name.eq_ignore_ascii_case(&fixed.field) {
+                        arg.value = fixed.value.clone().into_bytes();
+                        changed = true;
+                    }
+                }
+            }
+        }
+        Ok(if changed { MutationResult::Mutated } else { MutationResult::Skipped })
+    }
+    fn post_exec(&mut self, _: &mut S, _: Option<CorpusId>) -> Result<(), Error> { Ok(()) }
+}
+impl Named for FixedFieldsMutator {
+    fn name(&self) -> &Cow<'static, str> { &Cow::Borrowed("FixedFieldsMutator") }
+}
+
+// ─── ChainMutator (combine deux mutateurs, dans l'ordre) ────────────────────
+
+/// Applique `first` puis `second`, dans cet ordre, à chaque appel de
+/// `mutate`. Sert à brancher un post-processing (ex: FixedFieldsMutator)
+/// juste après la mutation automatique (SelectedMutator), sans les fondre
+/// en un seul type — StdMutationalStage attend un unique `Mutator`.
+pub struct ChainMutator<A, B> {
+    first:  A,
+    second: B,
+}
+
+impl<A, B> ChainMutator<A, B> {
+    pub fn new(first: A, second: B) -> Self {
+        Self { first, second }
+    }
+}
+
+impl<I, S, A, B> Mutator<I, S> for ChainMutator<A, B>
+where
+    A: Mutator<I, S>,
+    B: Mutator<I, S>,
+{
+    fn mutate(&mut self, state: &mut S, input: &mut I) -> Result<MutationResult, Error> {
+        let r1 = self.first.mutate(state, input)?;
+        let r2 = self.second.mutate(state, input)?;
+        Ok(if r1 == MutationResult::Mutated || r2 == MutationResult::Mutated {
+            MutationResult::Mutated
+        } else {
+            MutationResult::Skipped
+        })
+    }
+    fn post_exec(&mut self, state: &mut S, id: Option<CorpusId>) -> Result<(), Error> {
+        self.first.post_exec(state, id)?;
+        self.second.post_exec(state, id)
+    }
+}
+impl<A, B> Named for ChainMutator<A, B> {
+    fn name(&self) -> &Cow<'static, str> { &Cow::Borrowed("ChainMutator") }
 }
 
 impl<S: HasRand> Mutator<CcsdsSequenceInput, S> for SelectedMutator {
