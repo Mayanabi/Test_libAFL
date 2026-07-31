@@ -65,6 +65,9 @@ pub struct CatalogueGenerator {
     cross_app:    Option<(usize, usize)>,
     /// Some(n) → mode naive : génère n commandes par séquence sans attendre le feedback
     naive_batch:  Option<usize>,
+    /// true → mode all : une séquence = une TC par app (ordre alphabétique
+    /// des apps), TC choisie au hasard dans chaque app.
+    all_ordered:  bool,
 }
 
 impl CatalogueGenerator {
@@ -74,11 +77,19 @@ impl CatalogueGenerator {
         for (name, entry) in &catalogue {
             keys_by_app.entry(entry.app.clone()).or_default().push(name.clone());
         }
-        Self { catalogue, keys, keys_by_app, cross_app: None, naive_batch: None }
+        Self { catalogue, keys, keys_by_app, cross_app: None, naive_batch: None, all_ordered: false }
     }
 
     pub fn with_cross_app(mut self, min_tc: usize, max_tc: usize) -> Self {
         self.cross_app = Some((min_tc, max_tc));
+        self
+    }
+
+    /// Active le mode all : chaque séquence contient une commande par app du
+    /// catalogue (ordre alphabétique des apps), la TC étant tirée au hasard
+    /// dans chaque app à chaque appel de generate().
+    pub fn with_all_ordered(mut self) -> Self {
+        self.all_ordered = true;
         self
     }
 
@@ -117,6 +128,11 @@ impl<S: HasRand> Generator<CcsdsSequenceInput, S> for CatalogueGenerator {
             return Ok(self.generate_cross_app(state, min_tc, max_tc));
         }
 
+        // Mode all : une TC par app, ordre alphabétique des apps
+        if self.all_ordered {
+            return Ok(self.generate_all_ordered(state));
+        }
+
         // Mode normal : une seule TC par séquence
         let rng  = state.rand_mut();
         let idx  = rng.next() as usize % self.keys.len();
@@ -147,6 +163,26 @@ impl CatalogueGenerator {
         for (step, &app_idx) in indices[..n_tc].iter().enumerate() {
             let app  = app_names[app_idx];
             let keys = &self.keys_by_app[app];
+            let name = keys[rng.next() as usize % keys.len()].clone();
+            let tpl  = &self.catalogue[&name];
+            commands.push(build_command(&name, tpl, step as i32 + 1));
+        }
+
+        CcsdsSequenceInput { commands }
+    }
+
+    /// Mode all : une séquence = une commande par app du catalogue, envoyées
+    /// dans l'ordre alphabétique des apps (ordre stable d'une exécution à
+    /// l'autre). La TC précise est tirée au hasard dans chaque app, pour
+    /// varier la couverture sans changer l'app ni l'ordre d'envoi.
+    fn generate_all_ordered<S: HasRand>(&self, state: &mut S) -> CcsdsSequenceInput {
+        let mut app_names: Vec<&String> = self.keys_by_app.keys().collect();
+        app_names.sort();
+
+        let rng = state.rand_mut();
+        let mut commands = Vec::with_capacity(app_names.len());
+        for (step, app) in app_names.iter().enumerate() {
+            let keys = &self.keys_by_app[*app];
             let name = keys[rng.next() as usize % keys.len()].clone();
             let tpl  = &self.catalogue[&name];
             commands.push(build_command(&name, tpl, step as i32 + 1));

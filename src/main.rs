@@ -281,6 +281,12 @@ pub fn main() {
                 .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, cfg.seed_count)
                 .expect("Failed to generate initial corpus");
         }
+        config::FuzzMode::All => {
+            let mut gen = CatalogueGenerator::new(cat).with_all_ordered();
+            state
+                .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, cfg.seed_count)
+                .expect("Failed to generate initial corpus");
+        }
         _ => {
             let mut gen = CatalogueGenerator::new(cat);
             state

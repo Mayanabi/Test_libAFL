@@ -41,11 +41,33 @@ Génère des séquences de commandes à partir du catalogue NOS3
 Se configure entièrement dans **`fuzz_config.toml`** (pas besoin de
 recompiler) :
 
-- `mode` — `single_app`, `multi_app`, `all`, `cross_app`, `naive`, `stateful`
 - `apps` — apps ciblées (mode `single_app`/`multi_app`)
 - `mutators` — quels mutateurs utiliser (liste dans le fichier, ex:
   `arg_value`, `fc_walk`, `apid`, `seq_count`, ...)
 - `seed_count`, `fuzz_priority`, etc.
+
+### `mode` — les 6 valeurs possibles
+
+Une "exécution" = un appel à `wrapper.py` = une séquence de commandes
+envoyées à la suite, sur le **même NOS3 qui continue de tourner** (NOS3 ne
+redémarre QUE sur détection de crash — jamais entre deux exécutions
+normales).
+
+| mode         | catalogue utilisé                    | contenu d'une séquence (1 exécution)                                              |
+|--------------|----------------------------------------|-------------------------------------------------------------------------------------|
+| `single_app` | filtré sur `apps` (1 app)               | **1 commande**, tirée au hasard dans cette app                                     |
+| `multi_app`  | filtré sur `apps` (plusieurs apps)      | **1 commande**, tirée au hasard parmi ces apps                                     |
+| `all`        | catalogue complet (~315 TC, pas de filtre `apps`) | **1 commande par app** du catalogue, envoyées dans l'ordre alphabétique des apps (TC tirée au hasard dans chaque app) |
+| `cross_app`  | catalogue complet (pas de filtre `apps`) | **N commandes** (`cross_app_min_tc` à `cross_app_max_tc`), apps et ordre **aléatoires** — teste les interactions app-à-app |
+| `naive`      | catalogue complet                      | `naive_batch_size` commandes envoyées en rafale, sans attendre le feedback NOS3      |
+| `stateful`   | catalogue complet, filtré par la FSM courante | 1 commande valide selon l'état courant de la machine d'états de l'app choisie |
+
+`single_app`/`multi_app` ne diffèrent que par la taille de la liste `apps` —
+dans les deux cas, une seule commande est envoyée par exécution. `all` et
+`cross_app` envoient tous les deux plusieurs commandes par exécution, mais
+`all` est **ordonné et déterministe** (une par app, ordre alphabétique)
+tandis que `cross_app` est **aléatoire** (nombre, choix des apps et ordre
+tirés au hasard à chaque exécution).
 
 **Ctrl+C** :
 - 1 fois → annule la séquence en cours, redémarre NOS3 proprement, continue.
