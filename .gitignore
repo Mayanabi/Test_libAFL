@@ -11,10 +11,11 @@ target/
 *.log
 corpus/
 crashes/
+core.*
 
 # Docker / NOS3
 *.env
 
-# Éditeurs
+# Editeurs
 .vscode/
 .idea/

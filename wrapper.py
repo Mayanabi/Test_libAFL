@@ -95,6 +95,22 @@ def _poll_log(start: int, msgid_hex: str) -> str:
     return "TIMEOUT"
 
 
+def _clean_env_for_gui() -> dict:
+   
+    env = os.environ.copy()
+    for key in (
+        "GTK_PATH", "GTK_EXE_PREFIX", "GIO_MODULE_DIR",
+        "GDK_PIXBUF_MODULE_FILE", "GDK_PIXBUF_MODULEDIR",
+        "GTK_IM_MODULE_FILE", "LOCPATH", "GSETTINGS_SCHEMA_DIR",
+        "LD_LIBRARY_PATH",
+    ):
+        env.pop(key, None)
+    for key in list(env):
+        if key.startswith("SNAP"):
+            env.pop(key, None)
+    return env
+
+
 def _wait_for_nos3_ready() -> None:
     """
     Force un redémarrage propre de NOS3 (make stop && make launch) après un
@@ -135,6 +151,7 @@ def _wait_for_nos3_ready() -> None:
             ["gnome-terminal", f"--working-directory={_NOS3_DIR}", "--", "make", "launch"],
             timeout=_MAKE_TIMEOUT,
             check=False,
+            env=_clean_env_for_gui(),
         )
     except subprocess.TimeoutExpired:
         print(f"[wrapper.py] 'gnome-terminal -- make launch' a dépassé {_MAKE_TIMEOUT}s",

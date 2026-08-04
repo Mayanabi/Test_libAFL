@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::path::Path;
 
 use libafl::{
     corpus::CorpusId,
@@ -7,7 +8,7 @@ use libafl::{
     state::HasRand,
     Error, SerdeAny,
 };
-use libafl_bolts::{rands::Rand, Named};
+use libafl_bolts::{generic_hash_std, rands::Rand, Named};
 use serde::{Deserialize, Serialize};
 use libafl_bolts::ownedref::OwnedSlice;
 
@@ -97,7 +98,31 @@ pub struct CcsdsSequenceInput {
     pub commands: Vec<CcsdsCommand>,
 }
 
-impl Input for CcsdsSequenceInput {}
+/// Surcharge to_file/from_file (par défaut : postcard binaire) pour utiliser
+/// le même JSON que celui envoyé à wrapper.py (HasTargetBytes ci-dessous).
+/// Les fichiers dans ./crashes/ deviennent ainsi lisibles directement et
+/// rejouables tels quels : `python3 wrapper.py < crashes/<hash>`.
+impl Input for CcsdsSequenceInput {
+    fn to_file<P: AsRef<Path>>(&self, path: P) -> Result<(), Error> {
+        let json = serde_json::to_vec_pretty(self)
+            .map_err(|e| Error::serialize(format!("échec sérialisation JSON: {e}")))?;
+        std::fs::write(path, json)?;
+        Ok(())
+    }
+
+    fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        let bytes = std::fs::read(path)?;
+        serde_json::from_slice(&bytes)
+            .map_err(|e| Error::serialize(format!("échec désérialisation JSON: {e}")))
+    }
+
+    /// Même hash que le nom par défaut de LibAFL, avec ".json" en plus — pour
+    /// que chaque fichier dans ./crashes/ soit reconnaissable comme du JSON
+    /// juste par son nom, sans avoir à l'ouvrir.
+    fn generate_name(&self, _id: Option<CorpusId>) -> String {
+        format!("{:016x}.json", generic_hash_std(self))
+    }
+}
 
 /// Sérialisée en JSON avant d'être passée à wrapper.py via stdin
 impl HasTargetBytes for CcsdsSequenceInput {
@@ -112,7 +137,9 @@ impl HasTargetBytes for CcsdsSequenceInput {
 
 /// Parse une valeur ASCII décimale ou hexadécimale vers u64.
 /// Retourne None si la valeur est corrompue (non-UTF8, format invalide).
-fn parse_uint(bytes: &[u8]) -> Option<u64> {
+/// Exposé (pub) pour être réutilisé par send_packet (édition fine du header
+/// CCSDS d'un paquet fait main, même granularité que les mutateurs 7-12).
+pub fn parse_uint(bytes: &[u8]) -> Option<u64> {
     let s = std::str::from_utf8(bytes).ok()?.trim();
     if let Some(h) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
         u64::from_str_radix(h, 16).ok()
@@ -128,8 +155,8 @@ fn extract_bits(word: u16, shift: u8, width: u8) -> u16 {
 }
 
 /// Remplace un sous-champ de `width` bits à la position `shift` dans un mot 16
-/// bits, en conservant les autres bits inchangés.
-fn set_bits(word: u16, shift: u8, width: u8, new_val: u16) -> u16 {
+/// bits, en conservant les autres bits inchangés. Exposé (pub) — voir parse_uint.
+pub fn set_bits(word: u16, shift: u8, width: u8, new_val: u16) -> u16 {
     let mask = (1u16 << width) - 1;
     (word & !(mask << shift)) | ((new_val & mask) << shift)
 }
@@ -806,4 +833,77 @@ impl<S: HasRand> Mutator<CcsdsSequenceInput, S> for SelectedMutator {
 }
 impl Named for SelectedMutator {
     fn name(&self) -> &Cow<'static, str> { &Cow::Borrowed("SelectedMutator") }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// to_file() doit écrire exactement le même JSON que celui envoyé à
+    /// wrapper.py (HasTargetBytes), et from_file() doit le relire à
+    /// l'identique — sinon les fichiers de ./crashes/ ne seraient pas
+    /// rejouables tels quels via `python3 wrapper.py < crashes/<hash>`.
+    #[test]
+    fn to_file_matches_target_bytes_and_round_trips() {
+        let seq = CcsdsSequenceInput {
+            commands: vec![CcsdsCommand {
+                step: 1,
+                tc_name: "CFE_ES_NOOP_CC".into(),
+                fuzz: true,
+                mandatory: false,
+                delay_min_ms: 0,
+                delay_max_ms: 0,
+                args: vec![CcsdsArg {
+                    name: "FC".into(),
+                    arg_type: ArgType::UInt,
+                    size_bits: 8,
+                    value: b"0x00".to_vec(),
+                    endianness: Some(Endianness::Big),
+                }],
+                target: "CFS".into(),
+                port: 5012,
+                mutation: "havoc".into(),
+                replay: false,
+            }],
+        };
+
+        let tmp = std::env::temp_dir().join("maya_input_test.json");
+        seq.to_file(&tmp).expect("to_file should succeed");
+
+        let written = std::fs::read(&tmp).unwrap();
+        let parsed: serde_json::Value = serde_json::from_slice(&written).unwrap();
+        assert_eq!(parsed["commands"][0]["tc_name"], "CFE_ES_NOOP_CC");
+        assert_eq!(parsed["commands"][0]["port"], 5012);
+
+        let reloaded = CcsdsSequenceInput::from_file(&tmp).expect("from_file should succeed");
+        assert_eq!(reloaded.commands.len(), 1);
+        assert_eq!(reloaded.commands[0].tc_name, "CFE_ES_NOOP_CC");
+
+        std::fs::remove_file(&tmp).ok();
+    }
+
+    /// generate_name() doit toujours se terminer par ".json" — sinon les
+    /// fichiers dans ./crashes/ ne sont plus reconnaissables comme du JSON
+    /// juste par leur nom.
+    #[test]
+    fn generate_name_ends_with_json() {
+        let seq = CcsdsSequenceInput {
+            commands: vec![CcsdsCommand {
+                step: 1,
+                tc_name: "CFE_ES_NOOP_CC".into(),
+                fuzz: true,
+                mandatory: false,
+                delay_min_ms: 0,
+                delay_max_ms: 0,
+                args: vec![],
+                target: "CFS".into(),
+                port: 5012,
+                mutation: "havoc".into(),
+                replay: false,
+            }],
+        };
+
+        let name = seq.generate_name(None);
+        assert!(name.ends_with(".json"), "generate_name() = {name:?}");
+    }
 }

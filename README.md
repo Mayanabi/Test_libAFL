@@ -17,14 +17,15 @@ Sans ça, tout ce qui suit échoue avec `IP NOS3 introuvable`.
 
 ---
 
-## Vue d'ensemble : 4 façons d'envoyer des paquets
+## Vue d'ensemble : 5 façons d'envoyer des paquets
 
 | Besoin                                                        | Outil                          |
 |----------------------------------------------------------------|--------------------------------|
 | Fuzzing automatique (mutation continue, guidé par feedback)    | `cargo run`                    |
 | Fuzzing automatique + figer certains champs                    | `cargo run -- --fixed-fields`  |
 | Envoyer **un seul** paquet fait main (faux flags, valeur précise) | `cargo run --bin send_packet`  |
-| Rejouer une séquence connue (crash déjà observé)                | scripts Python (`replay_*.py`) |
+| Rejouer un crash trouvé par le fuzzer (`./crashes/`)            | `python3 wrapper.py < crashes/<hash>` |
+| Rejouer une séquence câblée en dur (bug déjà documenté)         | scripts Python (`replay_*.py`) |
 
 ---
 
@@ -73,7 +74,8 @@ tirés au hasard à chaque exécution).
 - 1 fois → annule la séquence en cours, redémarre NOS3 proprement, continue.
 - 2 fois rapprochées → arrêt total.
 
-Les crashes sont sauvegardés dans `./crashes/`.
+Les crashes sont sauvegardés dans `./crashes/`, directement en **JSON lisible**
+(même format que celui envoyé à `wrapper.py`) — voir section 5 pour les rejouer.
 
 ---
 
@@ -132,11 +134,55 @@ tel qu'il apparaît dans `catalogue_dump.json` : `ID`, `SEQ`, `LEN`, `FC`,
 `CHECKSUM`, ou un argument applicatif du TC). Le paquet est envoyé une seule
 fois, et le verdict NOS3 s'affiche dans le terminal.
 
+### Granularité fine : sous-champs du header CCSDS (`[header]`)
+
+Pour régler individuellement les sous-champs du header CCSDS primaire (48
+bits, `ID` + `SEQ`) — le même niveau de détail que les mutateurs
+`version`/`packet_type`/`sec_hdr_flag`/`apid`/`seq_flags`/`seq_count` — sans
+calculer le mot 16 bits à la main :
+
+```toml
+[header]
+version      = 0        # 3 bits (0-7)
+packet_type  = 1         # 1 bit  (0=TM, 1=TC)
+sec_hdr_flag = 0         # 1 bit
+apid         = 0x1870    # 11 bits — adresse de routage cFS
+seq_flags    = 3         # 2 bits (0-3)
+seq_count    = 0         # 14 bits
+```
+
+Tous les champs sont optionnels — seuls ceux présents sont modifiés, le
+reste du mot vient du template `tc_name`. Appliqué **avant** `overrides` :
+si tu mets aussi un override `"ID"` ou `"SEQ"`, celui-ci gagne.
+
 ---
 
-## 4. Rejouer une séquence connue — scripts Python
+## 4. Rejouer un crash trouvé par le fuzzer — `./crashes/`
 
-Pour reproduire un crash déjà observé, sans passer par Rust du tout :
+Chaque crash détecté pendant `cargo run` est sauvegardé dans `./crashes/`
+sous forme de fichier JSON (même format que ce que `wrapper.py` reçoit sur
+stdin) — pas besoin d'outil, le fichier se lit directement (`cat` ou ouvrir
+dans l'éditeur), et se rejoue tel quel :
+
+```bash
+cat crashes/1c2db06eb88b2a4c              # lisible directement
+python3 wrapper.py < crashes/1c2db06eb88b2a4c   # renvoie exactement la même séquence à NOS3
+```
+
+Chaque hash a aussi deux fichiers annexes internes à LibAFL (à ignorer) :
+`.{hash}` (compteur) et `.{hash}_1.metadata` (exec_time/executions).
+
+Tout ce qui atterrit dans `./crashes/` est automatiquement en JSON — aucune
+étape manuelle, aucune commande à lancer. C'est garanti par la surcharge de
+`to_file`/`from_file` dans `src/input.rs` (voir `impl Input for
+CcsdsSequenceInput`), qui remplace le format binaire par défaut de LibAFL.
+
+---
+
+## 5. Rejouer une séquence câblée en dur — scripts Python
+
+Pour un bug déjà documenté/analysé, avec une séquence précise écrite à la main
+(par opposition à un crash brut du fuzzer) :
 
 ```bash
 python3 replay_from_log.py sequence.txt   # rejoue les lignes MsgId/FC d'un extrait de log
@@ -172,7 +218,7 @@ tail -f /home/jstar/Desktop/github-nos3/maya_feedback.log
 src/
   main.rs        → boucle de fuzzing principale (cargo run)
   bin/
-    send_packet.rs → envoi manuel d'un paquet unique (cargo run --bin send_packet)
+    send_packet.rs  → envoi manuel d'un paquet unique (cargo run --bin send_packet)
   config.rs      → chargement de fuzz_config.toml / fixed_fields.toml
   catalogue.rs    → chargement de catalogue_dump.json
   generator.rs    → génère les séquences de commandes (normal/naive/cross_app/stateful)
@@ -186,4 +232,5 @@ fuzz_config.toml  → config du fuzzing automatique
 fixed_fields.toml → champs figés en post-processing (--fixed-fields)
 one_shot.toml     → paquet unique à envoyer (send_packet)
 catalogue_dump.json → catalogue des TC NOS3 (généré par dump_catalogue.py)
+crashes/          → crashes trouvés par le fuzzer, en JSON rejouable (voir section 4)
 ```

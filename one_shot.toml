@@ -27,3 +27,20 @@ value = "0xFF"
 # [[overrides]]
 # name  = "ID"
 # value = "0x1806"
+
+# ─── [header] — granularité fine, sous-champ par sous-champ ─────────────────
+#
+# Même niveau de contrôle que les mutateurs 7-12 (VersionMutator, ApidMutator,
+# SeqFlagsMutator, ...) : chaque sous-champ du header CCSDS primaire (48 bits,
+# ID + SEQ) réglable individuellement, sans avoir à recalculer le mot 16 bits
+# à la main. Appliqué AVANT `overrides` ci-dessus : si tu mets aussi un
+# override "ID" ou "SEQ", celui-ci gagne. Tous les champs sont optionnels —
+# seuls ceux présents ici sont modifiés, le reste vient du template tc_name.
+#
+# [header]
+# version      = 0        # 3 bits (0-7)          — nominal = 0
+# packet_type  = 1         # 1 bit  (0=TM, 1=TC)   — nominal = 1
+# sec_hdr_flag = 0         # 1 bit
+# apid         = 0x1870    # 11 bits — adresse de routage cFS
+# seq_flags    = 3         # 2 bits (0-3)          — nominal = 3 (0b11, complet)
+# seq_count    = 0         # 14 bits

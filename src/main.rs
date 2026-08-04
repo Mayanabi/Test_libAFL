@@ -2,8 +2,9 @@ use maya_libafl_poc::{catalogue, config, fsm, generator, input, executor, feedba
 
 use std::{
     borrow::Cow,
+    fs::OpenOptions,
     path::PathBuf,
-    process::Command,
+    process::{Command, Stdio},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
@@ -102,18 +103,101 @@ fn kill_pid(pid: u32) {
     }
 }
 
+/// Retire les variables d'environnement injectées par VSCode (installé en
+/// snap) qui redirigent GTK_PATH/GIO_MODULE_DIR/LOCPATH/etc. vers ses propres
+/// libs bundlées. `make launch` invoque gnome-terminal en interne (une
+/// fenêtre par conteneur, dont nos-fsw) ; avec ces variables héritées,
+/// gnome-terminal.real plante avant même d'ouvrir une fenêtre (symbol lookup
+/// error, conflit de version glibc) — make launch tourne alors sans qu'aucune
+/// fenêtre n'apparaisse. Même correctif que _clean_env_for_gui() côté
+/// wrapper.py (qui gère le cas crash cFS ; ceci gère le cas Ctrl+C).
+fn clean_env_for_gui(cmd: &mut Command) {
+    for key in [
+        "GTK_PATH", "GTK_EXE_PREFIX", "GIO_MODULE_DIR",
+        "GDK_PIXBUF_MODULE_FILE", "GDK_PIXBUF_MODULEDIR",
+        "GTK_IM_MODULE_FILE", "LOCPATH", "GSETTINGS_SCHEMA_DIR",
+        "LD_LIBRARY_PATH",
+    ] {
+        cmd.env_remove(key);
+    }
+    for (key, _) in std::env::vars() {
+        if key.starts_with("SNAP") {
+            cmd.env_remove(key);
+        }
+    }
+}
+
+/// Chemin du log où atterrit la sortie (très verbeuse) de make stop/launch,
+/// au lieu de spammer le terminal de cargo run à chaque redémarrage.
+const NOS3_RESTART_LOG: &str = "/tmp/nos3_restart.log";
+
+/// Arrête NOS3 (make stop) sans le relancer — utilisé sur double Ctrl+C, où
+/// l'utilisateur veut un arrêt total (fuzzer + NOS3), pas juste la fin de la
+/// boucle Rust en laissant les conteneurs Docker tourner.
+fn stop_nos3() {
+    eprintln!("[main] arrêt de NOS3 (make stop)... (détails : {NOS3_RESTART_LOG})");
+    let log_out = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(NOS3_RESTART_LOG)
+        .expect("impossible d'ouvrir le log de redémarrage NOS3");
+    let log_err = log_out.try_clone().expect("clone du handle de log");
+
+    let mut cmd = Command::new("make");
+    cmd.arg("stop")
+        .current_dir(NOS3_DIR)
+        .stdout(Stdio::from(log_out))
+        .stderr(Stdio::from(log_err));
+    let _ = cmd.status();
+    eprintln!("[main] NOS3 arrêté.");
+}
+
 /// Redémarre NOS3 proprement (make stop && make launch) pour repartir d'un
 /// état initial connu, puis bloque jusqu'à ce que cFS réponde de nouveau.
 /// Équivalent Rust de _wait_for_nos3_ready() dans wrapper.py, utilisé ici
 /// quand on tue nous-mêmes la séquence en cours (Ctrl+C), donc wrapper.py
 /// n'a pas l'occasion de le faire lui-même.
 fn restart_nos3() {
-    eprintln!("[main] redémarrage NOS3 (make stop - make launch)...");
-    for target in ["stop", "launch"] {
-        let _ = Command::new("make").arg(target).current_dir(NOS3_DIR).status();
+    eprintln!(
+        "[main] redémarrage NOS3 (make stop - make launch)... (détails : {NOS3_RESTART_LOG})"
+    );
+
+    // make stop reste bloquant et sans fenêtre : on doit attendre la fin du
+    // nettoyage avant de relancer.
+    {
+        let log_out = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(NOS3_RESTART_LOG)
+            .expect("impossible d'ouvrir le log de redémarrage NOS3");
+        let log_err = log_out.try_clone().expect("clone du handle de log");
+
+        let mut cmd = Command::new("make");
+        cmd.arg("stop")
+            .current_dir(NOS3_DIR)
+            .stdout(Stdio::from(log_out))
+            .stderr(Stdio::from(log_err));
+        let _ = cmd.status();
     }
 
-    eprintln!("[main] make launch terminé : attente cFS (max {}s)...", RESTART_WAIT.as_secs());
+    // make launch enveloppé dans gnome-terminal, comme le fait déjà
+    // _wait_for_nos3_ready() côté wrapper.py (chemin crash cFS) — sans ça, les
+    // --tab émis à l'intérieur de launch.sh n'atterrissent pas dans la même
+    // fenêtre quand le process appelant (nous) n'est pas lui-même déjà
+    // rattaché à un terminal ouvert par gnome-terminal (vérifié : en env
+    // identique, `make launch` direct depuis un terminal groupe bien les
+    // onglets, mais depuis ce binaire Rust ça ouvrait une fenêtre par onglet).
+    {
+        let mut cmd = Command::new("gnome-terminal");
+        cmd.arg(format!("--working-directory={NOS3_DIR}"))
+            .arg("--")
+            .arg("make")
+            .arg("launch");
+        clean_env_for_gui(&mut cmd);
+        let _ = cmd.status();
+    }
+
+    eprintln!("[main] make launch lancé : attente cFS (max {}s)...", RESTART_WAIT.as_secs());
     let deadline = Instant::now() + RESTART_WAIT;
     while Instant::now() < deadline {
         if let Some(pid) = try_resolve_cfs_pid() {
@@ -194,6 +278,11 @@ pub fn main() {
 
             if is_double {
                 eprintln!("[main] Ctrl+C x2 : arrêt total demandé.");
+                // Annule tout cancel_flag laissé par le 1er Ctrl+C (celui qui
+                // vient de déclencher ce double-appui) — sinon la boucle
+                // principale l'honore encore et redémarre NOS3 avant de
+                // s'arrêter (voir ordre des checks après fuzz_one()).
+                cancel_flag.store(false, Ordering::SeqCst);
                 stop_flag.store(true, Ordering::SeqCst);
             } else {
                 eprintln!("[main] Ctrl+C : annulation de la séquence en cours.");
@@ -301,7 +390,15 @@ pub fn main() {
     let selected_mutator     = SelectedMutator::new(cfg.mutators.clone());
     let fixed_fields_mutator = FixedFieldsMutator::new(fixed_fields);
     let combined_mutator     = ChainMutator::new(selected_mutator, fixed_fields_mutator);
-    let mut stages = tuple_list!(StdMutationalStage::new(combined_mutator));
+    // max_iterations=1 (au lieu du défaut LibAFL, un lot aléatoire jusqu'à 128
+    // exécutions par fuzz_one()) : sans ça, un Ctrl+C peut rester sans effet
+    // visible pendant tout un lot avant que la boucle ne revienne vérifier
+    // cancel_flag/stop_flag — avec 1, chaque exécution individuelle rend la
+    // main immédiatement après.
+    let mut stages = tuple_list!(StdMutationalStage::with_max_iterations(
+        combined_mutator,
+        std::num::NonZeroUsize::new(1).unwrap()
+    ));
 
     // Boucle manuelle (au lieu de fuzzer.fuzz_loop) pour pouvoir réagir au
     // Ctrl+C : annuler juste la séquence en cours et continuer, ou arrêter
@@ -309,11 +406,21 @@ pub fn main() {
     loop {
         if stop_flag.load(Ordering::SeqCst) {
             println!("[main] Arrêt total (Ctrl+C x2).");
+            stop_nos3();
             break;
         }
 
         if let Err(e) = fuzzer.fuzz_one(&mut stages, &mut executor, &mut state, &mut mgr) {
             eprintln!("[main] Erreur pendant l'itération (probablement due à l'annulation): {e}");
+        }
+
+        // stop_flag est prioritaire sur cancel_flag : un double Ctrl+C pendant
+        // que fuzz_one() était bloqué peut laisser cancel_flag à true (mis par
+        // le 1er appui) EN MÊME TEMPS que stop_flag (mis par le 2e) — sans ce
+        // check en premier, on redémarrerait NOS3 pour rien juste avant de
+        // s'arrêter au tour de boucle suivant.
+        if stop_flag.load(Ordering::SeqCst) {
+            continue;
         }
 
         if cancel_flag.swap(false, Ordering::SeqCst) {

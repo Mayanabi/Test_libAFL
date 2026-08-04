@@ -10,16 +10,41 @@ use std::process::{Command, Stdio};
 
 use serde::Deserialize;
 
-use maya_libafl_poc::{catalogue, generator, input::CcsdsSequenceInput};
+use maya_libafl_poc::{catalogue, generator, input};
+use input::CcsdsSequenceInput;
 
 #[derive(Deserialize, Debug)]
 struct OneShotSpec {
     /// Template de départ dans catalogue_dump.json (fournit port/target/args par défaut).
     tc_name: String,
+    /// Sous-champs du header CCSDS primaire (ID/SEQ), même granularité que
+    /// les mutateurs 7-12 (VersionMutator, ApidMutator, ...).
+    #[serde(default)]
+    header: HeaderOverride,
     #[serde(default)]
     overrides: Vec<FieldOverride>,
     delay_min_ms: Option<u32>,
     delay_max_ms: Option<u32>,
+}
+
+/// Sous-champs du primary header CCSDS (48 bits, voir input.rs) — chacun
+/// optionnel, seuls ceux présents dans le TOML sont modifiés, le reste vient
+/// du template `tc_name`. Appliqué AVANT `overrides` : si un override "ID"
+/// ou "SEQ" est aussi présent, il gagne (voir application dans main()).
+#[derive(Deserialize, Debug, Default)]
+struct HeaderOverride {
+    /// Version (3 bits, bits 15-13 de ID) — nominal = 0
+    version:      Option<u16>,
+    /// Type (1 bit, bit 12 de ID) — 0=TM, 1=TC
+    packet_type:  Option<u16>,
+    /// Secondary Header Flag (1 bit, bit 11 de ID)
+    sec_hdr_flag: Option<u16>,
+    /// APID (11 bits, bits 10-0 de ID) — adresse de routage cFS
+    apid:         Option<u16>,
+    /// Sequence Flags (2 bits, bits 15-14 de SEQ) — nominal = 3 (0b11, complet)
+    seq_flags:    Option<u16>,
+    /// Sequence Count (14 bits, bits 13-0 de SEQ)
+    seq_count:    Option<u16>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -29,6 +54,25 @@ struct FieldOverride {
     name:  String,
     /// Valeur brute envoyée telle quelle (ex: "0xFF", "1234", "toto").
     value: String,
+}
+
+/// Applique les sous-champs de `header` sur l'arg nommé `arg_name`
+/// (`ID` ou `SEQ`) en préservant les bits non concernés.
+fn apply_header_bits(cmd: &mut input::CcsdsCommand, arg_name: &str, fields: &[(Option<u16>, u8, u8)]) {
+    let Some(arg) = cmd.args.iter_mut().find(|a| a.name.eq_ignore_ascii_case(arg_name)) else {
+        return;
+    };
+    let mut word = input::parse_uint(&arg.value).unwrap_or(0) as u16;
+    let mut changed = false;
+    for &(value, shift, width) in fields {
+        if let Some(v) = value {
+            word = input::set_bits(word, shift, width, v);
+            changed = true;
+        }
+    }
+    if changed {
+        arg.value = format!("0x{word:04X}").into_bytes();
+    }
 }
 
 fn main() {
@@ -48,6 +92,20 @@ fn main() {
     let mut cmd = generator::build_command(&spec.tc_name, tpl, 1);
     if let Some(v) = spec.delay_min_ms { cmd.delay_min_ms = v; }
     if let Some(v) = spec.delay_max_ms { cmd.delay_max_ms = v; }
+
+    // Sous-champs du header CCSDS (granularité fine, comme les mutateurs 7-12) —
+    // appliqués avant `overrides` pour que ceux-ci gagnent en cas de conflit.
+    let h = &spec.header;
+    apply_header_bits(&mut cmd, "ID", &[
+        (h.version,      13, 3),
+        (h.packet_type,  12, 1),
+        (h.sec_hdr_flag, 11, 1),
+        (h.apid,          0, 11),
+    ]);
+    apply_header_bits(&mut cmd, "SEQ", &[
+        (h.seq_flags, 14, 2),
+        (h.seq_count,  0, 14),
+    ]);
 
     for ov in &spec.overrides {
         match cmd.args.iter_mut().find(|a| a.name.eq_ignore_ascii_case(&ov.name)) {

@@ -2,6 +2,9 @@
 name = "maya_libafl_poc"
 version = "0.1.0"
 edition = "2021"
+# `cargo run` sans --bin doit lancer le fuzzer principal, pas send_packet
+# (le second binaire, ajouté pour l'envoi manuel d'un paquet unique).
+default-run = "maya_libafl_poc"
 
 [dependencies]
 libafl = "0.15.3"
