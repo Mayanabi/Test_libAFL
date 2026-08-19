@@ -1,0 +1,3 @@
+simtime      Temps(s)   MsgId  FC   Type AppId     App Attack is_allowed Paquet (début hex, octets restants entre parenthèses)
+--------------------------------------------------------------------------------------------------------------------------------
+28700000     8.967861   0870   -    TLM  1114133   NAV 0      -1         0870c000000e00000002051e0000000000000000... (+1 octets)

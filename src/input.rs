@@ -355,19 +355,25 @@ impl Named for StringSpecialMutator {
 
 // ─── 5. CommandReorderMutator ────────────────────────────────────────────────
 
-/// Échange deux commandes aléatoires dans la séquence.
+/// Échange deux commandes fuzzables (cmd.fuzz) aléatoires dans la séquence —
+/// ne touche jamais une commande avec fuzz=false, pour que les commandes de
+/// mise en état d'un composant (ex: ENABLE avant LOG) restent à leur place
+/// même si ce mutateur est choisi par SelectedMutator.
 /// En mode cross_app, teste directement si l'ORDRE d'envoi influence
 /// le comportement de NOS3 (état partagé entre apps, dépendances temporelles).
 pub struct CommandReorderMutator;
 
 impl<S: HasRand> Mutator<CcsdsSequenceInput, S> for CommandReorderMutator {
     fn mutate(&mut self, state: &mut S, input: &mut CcsdsSequenceInput) -> Result<MutationResult, Error> {
-        let n = input.commands.len();
-        if n < 2 { return Ok(MutationResult::Skipped); }
+        let targets: Vec<usize> = input.commands.iter().enumerate()
+            .filter(|(_, cmd)| cmd.fuzz)
+            .map(|(ci, _)| ci)
+            .collect();
+        if targets.len() < 2 { return Ok(MutationResult::Skipped); }
 
         let rng = state.rand_mut();
-        let i   = rng.next() as usize % n;
-        let j   = rng.next() as usize % n;
+        let i   = targets[rng.next() as usize % targets.len()];
+        let j   = targets[rng.next() as usize % targets.len()];
         if i == j { return Ok(MutationResult::Skipped); }
 
         input.commands.swap(i, j);
@@ -385,15 +391,21 @@ impl Named for CommandReorderMutator {
 
 // ─── 6. DelayMutator ─────────────────────────────────────────────────────────
 
-/// Explore l'impact des délais inter-commandes sur le comportement de NOS3.
+/// Explore l'impact des délais inter-commandes sur le comportement de NOS3 —
+/// ne touche que les commandes fuzzables (cmd.fuzz), même raison que
+/// CommandReorderMutator.
 pub struct DelayMutator;
 
 impl<S: HasRand> Mutator<CcsdsSequenceInput, S> for DelayMutator {
     fn mutate(&mut self, state: &mut S, input: &mut CcsdsSequenceInput) -> Result<MutationResult, Error> {
-        if input.commands.is_empty() { return Ok(MutationResult::Skipped); }
+        let targets: Vec<usize> = input.commands.iter().enumerate()
+            .filter(|(_, cmd)| cmd.fuzz)
+            .map(|(ci, _)| ci)
+            .collect();
+        if targets.is_empty() { return Ok(MutationResult::Skipped); }
 
         let rng   = state.rand_mut();
-        let ci    = rng.next() as usize % input.commands.len();
+        let ci    = targets[rng.next() as usize % targets.len()];
         let field = rng.next() % 2;
         let delta = (rng.next() % 100) as u32;
 

@@ -5,3 +5,5 @@ pub mod generator;
 pub mod input;
 pub mod executor;
 pub mod feedback;
+pub mod nos3_control;
+pub mod state_catalogue;

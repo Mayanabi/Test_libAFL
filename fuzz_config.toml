@@ -11,7 +11,7 @@
 #   naive       → flood sans feedback         (~110 pkt/sec, naive_batch_size paquets/exec)
 #   stateful    → guidé par machine d'états   (FSM YAMLs dans fsm_dir)
 #
-mode = "all"
+mode = "cross_app"
 
 # ─── APPS CIBLÉES ─────────────────────────────────────────────────────────────
 # Utilisé pour single_app et multi_app uniquement.
@@ -82,4 +82,4 @@ fsm_dir = "/home/jstar/Desktop/maya3/patterns/stateful"
 # Exemple (plusieurs, tirage aléatoire à chaque paquet) :
 #   mutators = ["arg_value", "fc_walk", "int_boundary", "apid", "seq_count"]
 #
-mutators = ["arg_value", "fc_walk", "int_boundary", "string_special", "command_reorder", "delay", "version", "packet_type", "sec_hdr_flag", "apid", "seq_flags", "seq_count"]
+# mutators = ["arg_value", "fc_walk", "int_boundary", "string_special", "command_reorder", "delay", "version", "packet_type", "sec_hdr_flag", "apid", "seq_flags", "seq_count"]

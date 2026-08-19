@@ -257,3 +257,26 @@ impl<S: HasRand> Generator<CcsdsSequenceInput, S> for StatefulGenerator {
         Ok(CcsdsSequenceInput { commands: vec![build_command(&name, tpl, 1)] })
     }
 }
+
+// ─── FixedSeedGenerator ──────────────────────────────────────────────────────
+
+/// Génère toujours un clone de la même séquence — utilisé quand
+/// --component charge une séquence d'état du catalogue (state_sequences/,
+/// voir state_catalogue.rs) au lieu de générer depuis catalogue_dump.json.
+/// Le fuzzing normal (mutateurs, voir input.rs) prend le relais à partir de
+/// cette séquence de départ, en respectant le fuzz de chaque commande.
+pub struct FixedSeedGenerator {
+    seed: CcsdsSequenceInput,
+}
+
+impl FixedSeedGenerator {
+    pub fn new(seed: CcsdsSequenceInput) -> Self {
+        Self { seed }
+    }
+}
+
+impl<S> Generator<CcsdsSequenceInput, S> for FixedSeedGenerator {
+    fn generate(&mut self, _state: &mut S) -> Result<CcsdsSequenceInput, Error> {
+        Ok(self.seed.clone())
+    }
+}

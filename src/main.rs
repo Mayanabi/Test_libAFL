@@ -1,10 +1,9 @@
-use maya_libafl_poc::{catalogue, config, fsm, generator, input, executor, feedback};
+use maya_libafl_poc::{catalogue, config, fsm, generator, input, executor, feedback, nos3_control, state_catalogue};
 
 use std::{
     borrow::Cow,
-    fs::OpenOptions,
     path::PathBuf,
-    process::{Command, Stdio},
+    process::Command,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
@@ -35,15 +34,12 @@ use libafl_bolts::{
     tuples::{tuple_list, Handled},
 };
 
-// Répertoire du repo NOS3 (contient le Makefile : make stop / make launch) —
-// même chemin que _NOS3_DIR côté wrapper.py.
-const NOS3_DIR: &str = "/home/jstar/Desktop/github-nos3";
-// Temps max d'attente que cFS réponde après make launch.
-const RESTART_WAIT: Duration = Duration::from_secs(90);
-const RESTART_POLL: Duration = Duration::from_secs(2);
 // Fenêtre pendant laquelle un second Ctrl+C est considéré comme un "double
-// Ctrl+C" (arrêt total) plutôt qu'une nouvelle annulation.
-const DOUBLE_CTRLC_WINDOW: Duration = Duration::from_secs(2);
+// Ctrl+C" (arrêt total) plutôt qu'une nouvelle annulation. Après le 1er
+// Ctrl+C, la boucle principale attend cette même durée avant de committer au
+// redémarrage NOS3 — le temps de voir si un 2e Ctrl+C arrive (voir la boucle
+// principale : le redémarrage est retardé, pas juste la classification).
+const DOUBLE_CTRLC_WINDOW: Duration = Duration::from_secs(3);
 
 fn python_oneliner(code: &str, label: &str) -> String {
     let out = std::process::Command::new("python3")
@@ -76,21 +72,6 @@ fn resolve_cfs_pid() -> String {
     )
 }
 
-/// Variante non-panicking de resolve_cfs_pid(), pour le polling pendant un
-/// redémarrage — cFS n'est pas censé répondre tout de suite après make launch.
-fn try_resolve_cfs_pid() -> Option<String> {
-    let out = std::process::Command::new("python3")
-        .args([
-            "-c",
-            "import sys; sys.path.insert(0, '/home/jstar/Desktop/fuzzer/input_generator_dev'); \
-             from ProcessMonitoring import get_cfs_pid; print(get_cfs_pid() or '', end='')",
-        ])
-        .output()
-        .ok()?;
-    let result = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if result.is_empty() { None } else { Some(result) }
-}
-
 /// Tue une commande en cours (la séquence en train d'être envoyée à NOS3).
 fn kill_pid(pid: u32) {
     #[cfg(unix)]
@@ -101,113 +82,6 @@ fn kill_pid(pid: u32) {
     {
         let _ = Command::new("taskkill").args(["/F", "/PID", &pid.to_string()]).status();
     }
-}
-
-/// Retire les variables d'environnement injectées par VSCode (installé en
-/// snap) qui redirigent GTK_PATH/GIO_MODULE_DIR/LOCPATH/etc. vers ses propres
-/// libs bundlées. `make launch` invoque gnome-terminal en interne (une
-/// fenêtre par conteneur, dont nos-fsw) ; avec ces variables héritées,
-/// gnome-terminal.real plante avant même d'ouvrir une fenêtre (symbol lookup
-/// error, conflit de version glibc) — make launch tourne alors sans qu'aucune
-/// fenêtre n'apparaisse. Même correctif que _clean_env_for_gui() côté
-/// wrapper.py (qui gère le cas crash cFS ; ceci gère le cas Ctrl+C).
-fn clean_env_for_gui(cmd: &mut Command) {
-    for key in [
-        "GTK_PATH", "GTK_EXE_PREFIX", "GIO_MODULE_DIR",
-        "GDK_PIXBUF_MODULE_FILE", "GDK_PIXBUF_MODULEDIR",
-        "GTK_IM_MODULE_FILE", "LOCPATH", "GSETTINGS_SCHEMA_DIR",
-        "LD_LIBRARY_PATH",
-    ] {
-        cmd.env_remove(key);
-    }
-    for (key, _) in std::env::vars() {
-        if key.starts_with("SNAP") {
-            cmd.env_remove(key);
-        }
-    }
-}
-
-/// Chemin du log où atterrit la sortie (très verbeuse) de make stop/launch,
-/// au lieu de spammer le terminal de cargo run à chaque redémarrage.
-const NOS3_RESTART_LOG: &str = "/tmp/nos3_restart.log";
-
-/// Arrête NOS3 (make stop) sans le relancer — utilisé sur double Ctrl+C, où
-/// l'utilisateur veut un arrêt total (fuzzer + NOS3), pas juste la fin de la
-/// boucle Rust en laissant les conteneurs Docker tourner.
-fn stop_nos3() {
-    eprintln!("[main] arrêt de NOS3 (make stop)... (détails : {NOS3_RESTART_LOG})");
-    let log_out = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(NOS3_RESTART_LOG)
-        .expect("impossible d'ouvrir le log de redémarrage NOS3");
-    let log_err = log_out.try_clone().expect("clone du handle de log");
-
-    let mut cmd = Command::new("make");
-    cmd.arg("stop")
-        .current_dir(NOS3_DIR)
-        .stdout(Stdio::from(log_out))
-        .stderr(Stdio::from(log_err));
-    let _ = cmd.status();
-    eprintln!("[main] NOS3 arrêté.");
-}
-
-/// Redémarre NOS3 proprement (make stop && make launch) pour repartir d'un
-/// état initial connu, puis bloque jusqu'à ce que cFS réponde de nouveau.
-/// Équivalent Rust de _wait_for_nos3_ready() dans wrapper.py, utilisé ici
-/// quand on tue nous-mêmes la séquence en cours (Ctrl+C), donc wrapper.py
-/// n'a pas l'occasion de le faire lui-même.
-fn restart_nos3() {
-    eprintln!(
-        "[main] redémarrage NOS3 (make stop - make launch)... (détails : {NOS3_RESTART_LOG})"
-    );
-
-    // make stop reste bloquant et sans fenêtre : on doit attendre la fin du
-    // nettoyage avant de relancer.
-    {
-        let log_out = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(NOS3_RESTART_LOG)
-            .expect("impossible d'ouvrir le log de redémarrage NOS3");
-        let log_err = log_out.try_clone().expect("clone du handle de log");
-
-        let mut cmd = Command::new("make");
-        cmd.arg("stop")
-            .current_dir(NOS3_DIR)
-            .stdout(Stdio::from(log_out))
-            .stderr(Stdio::from(log_err));
-        let _ = cmd.status();
-    }
-
-    // make launch enveloppé dans gnome-terminal, comme le fait déjà
-    // _wait_for_nos3_ready() côté wrapper.py (chemin crash cFS) — sans ça, les
-    // --tab émis à l'intérieur de launch.sh n'atterrissent pas dans la même
-    // fenêtre quand le process appelant (nous) n'est pas lui-même déjà
-    // rattaché à un terminal ouvert par gnome-terminal (vérifié : en env
-    // identique, `make launch` direct depuis un terminal groupe bien les
-    // onglets, mais depuis ce binaire Rust ça ouvrait une fenêtre par onglet).
-    {
-        let mut cmd = Command::new("gnome-terminal");
-        cmd.arg(format!("--working-directory={NOS3_DIR}"))
-            .arg("--")
-            .arg("make")
-            .arg("launch");
-        clean_env_for_gui(&mut cmd);
-        let _ = cmd.status();
-    }
-
-    eprintln!("[main] make launch lancé : attente cFS (max {}s)...", RESTART_WAIT.as_secs());
-    let deadline = Instant::now() + RESTART_WAIT;
-    while Instant::now() < deadline {
-        if let Some(pid) = try_resolve_cfs_pid() {
-            eprintln!("[main] NOS3 de nouveau disponible (PID={pid}), attente init...");
-            std::thread::sleep(Duration::from_secs(2));
-            return;
-        }
-        std::thread::sleep(RESTART_POLL);
-    }
-    eprintln!("[main] NOS3 toujours absent après {}s", RESTART_WAIT.as_secs());
 }
 
 pub fn main() {
@@ -230,6 +104,48 @@ pub fn main() {
         }
         None => Vec::new(),
     };
+
+    // --list-components : affiche les composants du catalogue d'état
+    // (state_sequences/) et quitte, sans toucher à NOS3.
+    if cli_args.iter().any(|a| a == "--list-components") {
+        state_catalogue::list_components();
+        return;
+    }
+
+    // --component <NOM> (optionnel) : part de la séquence d'état connue
+    // state_sequences/<NOM>.json (voir state_catalogue.rs) au lieu de la
+    // génération procédurale depuis catalogue_dump.json — pour un composant
+    // qui a une machine d'état de commandes (ex: NOVATEL_OEM615 : NOOP →
+    // ENABLE → LOG → UNLOG → RST_COUNTERS → DISABLE). --start-step N force
+    // fuzz=false avant l'étape N et fuzz=true à partir de N (override le
+    // fuzz du fichier), pour ne muter qu'à partir d'un état déjà atteint.
+    // --show affiche la séquence chargée et quitte, sans lancer le fuzzing.
+    let component_seed = cli_args.iter()
+        .position(|a| a == "--component")
+        .and_then(|i| cli_args.get(i + 1))
+        .map(|name| {
+            let mut seed = state_catalogue::load_component(name);
+            if let Some(n) = cli_args.iter()
+                .position(|a| a == "--start-step")
+                .and_then(|i| cli_args.get(i + 1))
+            {
+                let n: i32 = n.parse().unwrap_or_else(|e| panic!("--start-step invalide '{n}': {e}"));
+                state_catalogue::apply_start_step(&mut seed, n);
+            }
+            eprintln!(
+                "[main] --component {name} : séquence catalogue ({} étape(s)) utilisée comme seed",
+                seed.commands.len()
+            );
+            seed
+        });
+
+    if cli_args.iter().any(|a| a == "--show") {
+        match &component_seed {
+            Some(seed) => state_catalogue::print_sequence_preview(seed),
+            None => eprintln!("[main] --show sans --component : rien à afficher."),
+        }
+        return;
+    }
 
     let fuzz_mode_str = match cfg.mode {
         config::FuzzMode::Naive    => "naive",
@@ -335,52 +251,62 @@ pub fn main() {
         None,
     );
 
-    // ── Catalogue ─────────────────────────────────────────────────────────────
-    let raw_cat = catalogue::load("catalogue_dump.json");
-    let cat     = catalogue::filter(raw_cat, &cfg);
+    // ── Génération des seeds initiales ────────────────────────────────────────
+    // --component (voir plus haut) prend le pas sur `mode` : la séquence du
+    // catalogue d'état sert de seed directement, la génération procédurale
+    // depuis catalogue_dump.json n'a pas lieu d'être dans ce cas.
+    if let Some(seed) = component_seed {
+        let mut gen = generator::FixedSeedGenerator::new(seed);
+        state
+            .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, cfg.seed_count)
+            .expect("Failed to generate initial corpus");
+    } else {
+        // ── Catalogue ─────────────────────────────────────────────────────────
+        let raw_cat = catalogue::load("catalogue_dump.json");
+        let cat     = catalogue::filter(raw_cat, &cfg);
 
-    if cat.is_empty() {
-        panic!(
-            "Le catalogue filtré est vide — vérifie fuzz_config.toml\n\
-             (apps={:?}, fuzz_priority={:?})",
-            cfg.apps, cfg.fuzz_priority
-        );
-    }
+        if cat.is_empty() {
+            panic!(
+                "Le catalogue filtré est vide — vérifie fuzz_config.toml\n\
+                 (apps={:?}, fuzz_priority={:?})",
+                cfg.apps, cfg.fuzz_priority
+            );
+        }
 
-    // ── Génération des seeds initiales selon le mode ──────────────────────────
-    match cfg.mode {
-        config::FuzzMode::Stateful => {
-            let fsm = shared_fsm.expect("FSM should be loaded for stateful mode");
-            let mut gen = StatefulGenerator::new(cat, fsm);
-            state
-                .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, cfg.seed_count)
-                .expect("Failed to generate initial corpus");
-        }
-        config::FuzzMode::Naive => {
-            let mut gen = CatalogueGenerator::new(cat)
-                .with_naive_batch(cfg.naive_batch_size);
-            state
-                .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, cfg.seed_count)
-                .expect("Failed to generate initial corpus");
-        }
-        config::FuzzMode::CrossApp => {
-            let mut gen = CatalogueGenerator::new(cat)
-                .with_cross_app(cfg.cross_app_min_tc, cfg.cross_app_max_tc);
-            state
-                .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, cfg.seed_count)
-                .expect("Failed to generate initial corpus");
-        }
-        config::FuzzMode::All => {
-            let mut gen = CatalogueGenerator::new(cat).with_all_ordered();
-            state
-                .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, cfg.seed_count)
-                .expect("Failed to generate initial corpus");
-        }
-        _ => {
-            let mut gen = CatalogueGenerator::new(cat);
-            state
-                .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, cfg.seed_count)
-                .expect("Failed to generate initial corpus");
+        match cfg.mode {
+            config::FuzzMode::Stateful => {
+                let fsm = shared_fsm.expect("FSM should be loaded for stateful mode");
+                let mut gen = StatefulGenerator::new(cat, fsm);
+                state
+                    .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, cfg.seed_count)
+                    .expect("Failed to generate initial corpus");
+            }
+            config::FuzzMode::Naive => {
+                let mut gen = CatalogueGenerator::new(cat)
+                    .with_naive_batch(cfg.naive_batch_size);
+                state
+                    .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, cfg.seed_count)
+                    .expect("Failed to generate initial corpus");
+            }
+            config::FuzzMode::CrossApp => {
+                let mut gen = CatalogueGenerator::new(cat)
+                    .with_cross_app(cfg.cross_app_min_tc, cfg.cross_app_max_tc);
+                state
+                    .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, cfg.seed_count)
+                    .expect("Failed to generate initial corpus");
+            }
+            config::FuzzMode::All => {
+                let mut gen = CatalogueGenerator::new(cat).with_all_ordered();
+                state
+                    .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, cfg.seed_count)
+                    .expect("Failed to generate initial corpus");
+            }
+            _ => {
+                let mut gen = CatalogueGenerator::new(cat);
+                state
+                    .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, cfg.seed_count)
+                    .expect("Failed to generate initial corpus");
+            }
         }
     }
 
@@ -406,7 +332,7 @@ pub fn main() {
     loop {
         if stop_flag.load(Ordering::SeqCst) {
             println!("[main] Arrêt total (Ctrl+C x2).");
-            stop_nos3();
+            nos3_control::stop_nos3();
             break;
         }
 
@@ -424,8 +350,26 @@ pub fn main() {
         }
 
         if cancel_flag.swap(false, Ordering::SeqCst) {
-            println!("[main] Séquence annulée — redémarrage NOS3 avant de continuer...");
-            restart_nos3();
+            // On ne committe pas tout de suite au redémarrage : on attend
+            // DOUBLE_CTRLC_WINDOW pour laisser le temps à un 2e Ctrl+C
+            // d'arriver et de transformer ça en arrêt total. Sans cette
+            // pause, le redémarrage démarrait immédiatement après le 1er
+            // Ctrl+C, sans jamais laisser sa chance au double Ctrl+C.
+            println!(
+                "[main] Séquence annulée — {}s d'attente avant redémarrage (double Ctrl+C = arrêt total)...",
+                DOUBLE_CTRLC_WINDOW.as_secs()
+            );
+            let deadline = Instant::now() + DOUBLE_CTRLC_WINDOW;
+            while Instant::now() < deadline && !stop_flag.load(Ordering::SeqCst) {
+                std::thread::sleep(Duration::from_millis(50));
+            }
+
+            if stop_flag.load(Ordering::SeqCst) {
+                continue;
+            }
+
+            println!("[main] Redémarrage NOS3 avant de continuer...");
+            nos3_control::restart_nos3();
         }
     }
 }
