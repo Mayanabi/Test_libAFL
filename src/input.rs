@@ -175,9 +175,12 @@ fn interesting_ints(size_bits: u16) -> &'static [u64] {
     }
 }
 
-// ─── 1. ArgValueMutator (havoc byte-level — utile pour STRING/BLOCK) ─────────
+// ─── 1. ArgValueMutator (havoc byte-level) ───────────────────────────────────
 
-/// Mutations havoc brutes sur les bytes ASCII de la `value`.
+/// Mutations havoc brutes sur les bytes ASCII de la `value`. Cible TOUS les
+/// args d'une commande fuzzable, sans filtrer par arg_type — donc y compris
+/// ID/SEQ/LEN/FC/CHECKSUM (args[0..5], tous UINT), pas seulement les args
+/// applicatifs STRING/BLOCK.
 
 pub struct ArgValueMutator;
 
@@ -279,6 +282,9 @@ impl Named for FcWalkMutator {
 /// Génère des valeurs aux frontières pour les args UINT/INT en respectant la
 /// taille déclarée (size_bits). Beaucoup plus efficace que les bit-flips aléatoires
 /// pour trouver des overflows, underflows et comportements off-by-one dans cFS.
+/// S'applique aussi à ID/SEQ/LEN/FC/CHECKSUM (tous UINT) — c'est d'ailleurs le
+/// seul mutateur (avec ArgValueMutator) capable de toucher LEN, qui n'a pas de
+/// mutateur dédié.
 pub struct IntBoundaryMutator;
 
 impl<S: HasRand> Mutator<CcsdsSequenceInput, S> for IntBoundaryMutator {

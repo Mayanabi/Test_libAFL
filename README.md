@@ -15,6 +15,13 @@ make stop            # arrête NOS3
 
 Sans ça, tout ce qui suit échoue avec `IP NOS3 introuvable`.
 
+Un redémarrage automatique de NOS3 (Ctrl+C simple, crash détecté, ou entre
+les phases de `hk_diff_test`) lance `make launch` dans un nouveau
+`gnome-terminal` — un environnement de bureau avec `gnome-terminal`
+disponible est donc requis pour que ces redémarrages automatiques
+fonctionnent (le code nettoie au passage les variables d'env `GTK_PATH`/
+`SNAP*` pour éviter les conflits quand Claude/VSCode tourne dans un snap).
+
 ---
 
 ## Vue d'ensemble : 7 façons d'envoyer des paquets
@@ -46,8 +53,17 @@ recompiler) :
 
 - `apps` — apps ciblées (mode `single_app`/`multi_app`)
 - `mutators` — quels mutateurs utiliser (liste dans le fichier, ex:
-  `arg_value`, `fc_walk`, `apid`, `seq_count`, ...)
-- `seed_count`, `fuzz_priority`, etc.
+  `arg_value`, `fc_walk`, `apid`, `seq_count`, ...). Absent du fichier =
+  tous les mutateurs, un tiré au hasard à chaque paquet muté.
+- `fuzz_priority` — filtre supplémentaire sur le catalogue, appliqué **quel
+  que soit le `mode`** (y compris `all`/`cross_app`/`naive`/`stateful`, pas
+  seulement `single_app`/`multi_app`).
+- `fsm_dir` — dossier des définitions de machines d'état (YAML) utilisées en
+  mode `stateful`. Par défaut `/home/jstar/Desktop/maya3/patterns/stateful`
+  — **ce mode dépend donc d'un projet externe** (`maya3`) qui génère ces
+  fichiers ; un `.yaml` invalide dans ce dossier est simplement ignoré
+  (message sur stderr), le fuzzing continue avec les FSM restantes.
+- `seed_count`, `naive_batch_size`, `cross_app_min_tc`, `cross_app_max_tc`, etc.
 
 ### `mode` — les 6 valeurs possibles
 
@@ -68,16 +84,76 @@ normales).
 `single_app`/`multi_app` ne diffèrent que par la taille de la liste `apps` —
 dans les deux cas, une seule commande est envoyée par exécution. `all` et
 `cross_app` envoient tous les deux plusieurs commandes par exécution, mais
-`all` est **ordonné et déterministe** (une par app, ordre alphabétique)
-tandis que `cross_app` est **aléatoire** (nombre, choix des apps et ordre
-tirés au hasard à chaque exécution).
+`all` est **ordonné et déterministe** (une par app, ordre alphabétique —
+seule la TC exacte tirée dans chaque app change à chaque exécution, l'ordre
+des apps ne change jamais) tandis que `cross_app` est **aléatoire** (nombre,
+choix des apps et ordre tirés au hasard à chaque exécution). En `cross_app`,
+chaque app n'apparaît qu'une seule fois par séquence, et le nombre réel de
+commandes est plafonné au nombre d'apps disponibles dans le catalogue filtré
+même si `cross_app_max_tc` est plus grand.
+
+### Mode `stateful` en détail
+
+Le générateur essaie jusqu'à 20 fois une app tirée au hasard : pour chacune,
+il regarde l'état courant de sa machine d'état (FSM, chargée depuis
+`fsm_dir`) et ne garde que les commandes valides depuis cet état, plus les
+commandes qu'une FSM peut déclarer « toujours valides » quel que soit l'état
+(ex: NOOP). **Si aucune commande valide n'est trouvée après 20 essais, le
+générateur abandonne la contrainte d'état et tire une commande complètement
+aléatoire** dans tout le catalogue — donc pas de garantie absolue de
+validité d'état dans ce cas de repli.
+
+L'état de chaque FSM avance ensuite selon le verdict NOS3 reçu :
+- `CRASH`/`TIMEOUT` → l'app est **réinitialisée à son état initial**.
+- `OK` → avance vers l'état suivant si une transition `(état courant, commande
+  envoyée)` existe, sinon reste sur place.
+- tout autre verdict (`DROP_*`) → reste dans l'état courant, sans action.
+
+### Mutateurs — précisions sur certains d'entre eux
+
+La liste complète et leurs noms de clé TOML sont dans `fuzz_config.toml`.
+Quelques comportements moins évidents à la lecture :
+
+- `arg_value` (`ArgValueMutator`) et `int_boundary` (`IntBoundaryMutator`)
+  mutent **tous** les args d'une commande fuzzable, y compris les 5 champs
+  réservés `ID`/`SEQ`/`LEN`/`FC`/`CHECKSUM` (tous UINT) — pas seulement les
+  paramètres applicatifs. C'est le seul moyen de fuzzer `LEN`, qui n'a pas de
+  mutateur dédié.
+- `fc_walk` (`FcWalkMutator`) : 1 chance sur 3 de sauter à une valeur FC
+  totalement aléatoire (0-255), sinon incrémente/décrémente le FC courant de
+  1 à 16.
+- `apid`/`seq_count` (`ApidMutator`/`SeqCountMutator`) : tirent parmi 5
+  valeurs frontières fixes (0, 1, milieu, max-1, max de la plage), pas une
+  valeur aléatoire sur toute la plage — pour l'APID, `0x7FF` correspond au
+  paquet CCSDS « idle », cas spécial du standard.
 
 **Ctrl+C** :
-- 1 fois → annule la séquence en cours, redémarre NOS3 proprement, continue.
+- 1 fois → annule la séquence en cours et attend 3s (fenêtre pour un second
+  Ctrl+C) avant de redémarrer NOS3 proprement et continuer. Ce redémarrage a
+  lieu **même si aucune séquence n'était en cours** au moment du Ctrl+C.
 - 2 fois rapprochées → arrêt total.
+
+Le redémarrage automatique **sur crash détecté** (pas Ctrl+C) est un chemin
+différent : il est déclenché et géré côté Python, dans `wrapper.py`, dès
+qu'un `TIMEOUT` est confirmé par la mort du process cFS — pas dans
+`nos3_control.rs` (qui ne gère que Ctrl+C et `hk_diff_test`).
 
 Les crashes sont sauvegardés dans `./crashes/`, directement en **JSON lisible**
 (même format que celui envoyé à `wrapper.py`) — voir section 6 pour les rejouer.
+Seul un `TIMEOUT` confirmé par la mort réelle du process cFS est traité comme
+un crash ; un `TIMEOUT` de polling du log sans mort de process reste un
+verdict normal (`ExitKind::Ok`), traité comme une entrée corpus classique et
+**pas** sauvegardé dans `./crashes/`.
+
+### Comment le feedback guide le corpus (`feedback.rs`)
+
+Une séquence est gardée en corpus si la clé
+`{tc_name de la 1ère commande}:{verdicts combinés de toutes les commandes}`
+(ex: `"NOVATEL_OEM615_NOOP_CC:OK|DROP_SB_ERROR"`) n'a jamais été vue. Cette
+clé ignore le nom des commandes 2, 3, ... d'une séquence multi-commandes
+(modes `all`/`cross_app`) : seule la 1ère commande et l'enchaînement des
+verdicts comptent pour la déduplication. Une séquence tuée par Ctrl+C
+(`killed_flag`) est systématiquement exclue du corpus.
 
 ---
 
@@ -131,6 +207,11 @@ sans avoir à éditer le JSON à la main.
 
 Sans `--component`, comportement inchangé : génération selon `mode` dans
 `fuzz_config.toml` (section 1).
+
+Les fichiers `state_sequences/*.json` contiennent aussi des champs
+`mandatory`, `mutation` et `replay` par commande. **Ils ne sont jamais lus
+par le code Rust — seul `fuzz` a un effet réel.** Ne pas compter sur
+`mandatory: true` pour protéger une commande : il faut `fuzz: false`.
 
 ---
 
@@ -206,7 +287,21 @@ name  = "NOM_DU_PARAM"   # nom de l'arg tel qu'il apparaît dans catalogue_dump.
 value = "valeur"          # envoyée telle quelle (ex: "0xFF", "1234", "toto")
 ```
 
-Le paquet est envoyé une seule fois, et le verdict NOS3 s'affiche dans le terminal.
+### `delay_min_ms` / `delay_max_ms` (optionnels, top-level)
+
+```toml
+delay_min_ms = 0
+delay_max_ms = 200
+```
+
+Contrôlent le délai avant l'envoi du paquet, comme le mutateur `delay` en
+fuzzing automatique. Absents = pas de délai ajouté.
+
+Le paquet est envoyé une seule fois, et le verdict NOS3 s'affiche dans le
+terminal. Si un `[[payload]] name` ne correspond à aucun arg du TC choisi
+(ou si `[secondary_header]` cible un TC sans secondary header), un
+avertissement `[send_packet] champ '...' introuvable — ignoré` s'affiche
+sur stderr et le champ est simplement ignoré (pas d'erreur bloquante).
 
 ---
 
@@ -235,6 +330,17 @@ commandes, events EVS (ex: `MsgId=0808`, canal partagé texte) et trafic des
 autres apps sur le bus sont exclus. Résultat dans `hk_phase1_baseline.csv` /
 `hk_phase2_mutated.csv` / `hk_phase3_replay.csv` (tableau lisible, colonnes
 alignées, hex des gros paquets tronqué avec le nombre d'octets omis).
+
+Le `MsgId` HK attendu pour une app n'est pas lu depuis une source de vérité
+indépendante : il est **dérivé par calcul** du `MsgId` de la commande envoyée
+(bit 12 "Type" mis à 0). Cette heuristique n'a été validée empiriquement que
+sur un seul composant (`NOVATEL_OEM615` : commande `ID=0x1870` → HK
+`MsgId=0x0870`) — à vérifier si elle n'est pas vraie pour un autre composant.
+Chaque phase attend jusqu'à 20s (`HK_MAX_WAIT`) qu'une ligne HK avec ce
+`MsgId` apparaisse dans `/tmp/logids_p3.csv` (lu via `docker exec` dans le
+conteneur `sc01-nos-fsw`) ; si rien n'apparaît, la phase continue quand même
+avec ce qui a été capturé et affiche un avertissement (`⚠`) — le CSV produit
+peut donc être vide ou incomplet sans que l'outil s'arrête.
 
 ---
 
@@ -309,10 +415,13 @@ src/
   executor.rs      → pont vers wrapper.py (subprocess)
   feedback.rs      → interprète les verdicts NOS3 pour guider le corpus
   fsm.rs           → machines d'état (mode stateful)
-  nos3_control.rs   → make stop / make launch (partagé main.rs + hk_diff_test.rs)
+  nos3_control.rs   → make stop / make launch pour Ctrl+C et hk_diff_test.rs
+                      (PAS le redémarrage automatique sur crash, voir wrapper.py)
   state_catalogue.rs → catalogue de séquences d'état (state_sequences/, --component)
 
-wrapper.py        → reçoit le JSON depuis Rust, envoie en UDP, lit le verdict
+wrapper.py        → reçoit le JSON depuis Rust, envoie en UDP, lit le verdict,
+                     et gère lui-même le redémarrage NOS3 si un crash (process
+                     cFS mort) est détecté
 fuzz_config.toml  → config du fuzzing automatique
 fixed_fields.toml → champs figés en post-processing (--fixed-fields)
 one_shot.toml     → paquet unique à envoyer (send_packet)
