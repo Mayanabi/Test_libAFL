@@ -1,0 +1,33 @@
+app_name: "GENERIC_MAG"
+msgid: "0x192A"
+description: "Magnetometer sensor driver — enables/disables SPI-connected magnetometer device and publishes B-field telemetry"
+stateless: false
+
+states:
+  - DISABLED
+  - ENABLED
+
+transitions:
+  - from: DISABLED
+    to: ENABLED
+    tc_fc: 2
+    tc_name: "GENERIC_MAG_ENABLE_CC"
+    mandatory: true
+    fuzz: false
+    notes: "Opens SPI port and sets DeviceEnabled=GENERIC_MAG_DEVICE_ENABLED. Device data telemetry only sent when enabled."
+
+  - from: ENABLED
+    to: DISABLED
+    tc_fc: 3
+    tc_name: "GENERIC_MAG_DISABLE_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Closes SPI port and sets DeviceEnabled=GENERIC_MAG_DEVICE_DISABLED."
+
+commands_always_valid:
+  - tc_fc: 0
+    tc_name: "GENERIC_MAG_NOOP_CC"
+    notes: "Standard cFS NOOP, valid in any state"
+  - tc_fc: 1
+    tc_name: "GENERIC_MAG_RST_COUNTERS_CC"
+    notes: "Standard cFS reset, valid in any state"

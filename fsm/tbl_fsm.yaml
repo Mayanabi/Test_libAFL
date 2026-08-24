@@ -1,0 +1,92 @@
+app_name: "TBL"
+msgid: "0x1804"
+description: "cFE Table Services — manages named in-memory tables owned by cFS apps. Loading, validating, and activating a table buffer follows a strict 3-step sequence. Activating without prior validation is rejected at the source level."
+stateless: false
+
+# Source: fsw/cfe/modules/tbl/fsw/src/cfe_tbl_task_cmds.c
+# CFE_TBL_ActivateCmd() line 963: requires LoadInProgress != NO_LOAD_IN_PROGRESS
+# CFE_TBL_ActivateCmd() line 991: requires Validated == true or emits UNVALIDATED_ERR_EID
+# CFE_TBL_LoadCmd() line 392: rejects if LoadPending is already set (previous activate not applied)
+
+states:
+  - IDLE
+  - LOAD_IN_PROGRESS
+  - VALIDATED
+  - LOAD_PENDING
+
+transitions:
+  - from: IDLE
+    to: LOAD_IN_PROGRESS
+    tc_fc: 2
+    tc_name: "CFE_TBL_LOAD_CC"
+    mandatory: true
+    fuzz: true
+    notes: "Params: LoadType (uint8: 0=ENTIRE_FILE, 1=PARTIAL), spare(3B), TableName(64B string). FUZZ: path traversal in TableName, LoadType=255, file with corrupt cFE FS header, file larger than table."
+
+  - from: LOAD_IN_PROGRESS
+    to: VALIDATED
+    tc_fc: 4
+    tc_name: "CFE_TBL_VALIDATE_CC"
+    mandatory: true
+    fuzz: false
+    notes: "Params: ActiveTableFlag (uint8: 0=inactive, 1=active), spare(3B), TableName(64B). Must validate INACTIVE buffer (ActiveTableFlag=0) before ACTIVATE. Validation runs owner app's registered callback — result sets Validated=true."
+
+  - from: VALIDATED
+    to: LOAD_PENDING
+    tc_fc: 5
+    tc_name: "CFE_TBL_ACTIVATE_CC"
+    mandatory: true
+    fuzz: true
+    notes: "Param: TableName(64B). Sets LoadPending=true. Owner app applies on next CFE_TBL_Manage() call. FUZZ: activate without prior validate (rejected with UNVALIDATED_ERR_EID), unknown table name."
+
+  - from: LOAD_IN_PROGRESS
+    to: IDLE
+    tc_fc: 9
+    tc_name: "CFE_TBL_ABORT_LOAD_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Param: TableName(64B). Releases the inactive buffer — resets LoadInProgress to NO_LOAD_IN_PROGRESS. Abort mid-load returns to IDLE."
+
+commands_always_valid:
+  - tc_fc: 0
+    tc_name: "CFE_TBL_NOOP_CC"
+  - tc_fc: 1
+    tc_name: "CFE_TBL_RESET_COUNTERS_CC"
+  - tc_fc: 3
+    tc_name: "CFE_TBL_DUMP_CC"
+    fuzz: true
+    notes: "Params: ActiveTableFlag(uint8), spare(3B), TableName(64B), DumpFilename(64B). FUZZ: DumpFilename path traversal, valid table name with invalid dump path."
+  - tc_fc: 6
+    tc_name: "CFE_TBL_DUMP_REGISTRY_CC"
+    fuzz: true
+    notes: "Param: DumpFilename(64B). Writes full table registry to file. FUZZ: path traversal."
+  - tc_fc: 7
+    tc_name: "CFE_TBL_SEND_REGISTRY_CC"
+    fuzz: true
+    notes: "Param: TableName(64B). Sends registry entry as telemetry packet. FUZZ: unknown table name."
+  - tc_fc: 8
+    tc_name: "CFE_TBL_DELETE_CDS_CC"
+    fuzz: true
+    notes: "Param: TableName(64B). Deletes Critical Data Store entry for a table. FUZZ: active table name (should be rejected), unknown table name."
+
+fuzz_sequence:
+  - step: 1
+    tc_fc: 2
+    tc_name: "CFE_TBL_LOAD_CC"
+    notes: "Load a valid (or crafted) file into a known table's inactive buffer."
+  - step: 2
+    tc_fc: 4
+    tc_name: "CFE_TBL_VALIDATE_CC"
+    notes: "Validate the inactive buffer. If app has no validator, Validated=true immediately."
+  - step: 3
+    tc_fc: 5
+    tc_name: "CFE_TBL_ACTIVATE_CC"
+    notes: "Set LoadPending — owner app applies on next management call. After this, table is live."
+
+fuzz_notes:
+  critical:
+    - "FC=2 (LOAD) then FC=5 (ACTIVATE): Load a crafted binary table — corrupt application data structures of any owner app"
+    - "FC=2 then FC=4 then FC=5: Full legitimate load sequence with crafted payload"
+    - "FC=5 without FC=2: Rejected (ACTIVATE_ERR_EID) — useful for error injection testing"
+    - "FC=5 with FC=2 but without FC=4: Rejected (UNVALIDATED_ERR_EID) — useful for error injection"
+    - "FC=8 (DELETE_CDS) on active table: Attempt to break persistence across reset"

@@ -55,15 +55,18 @@ recompiler) :
 - `mutators` — quels mutateurs utiliser (liste dans le fichier, ex:
   `arg_value`, `fc_walk`, `apid`, `seq_count`, ...). Absent du fichier =
   tous les mutateurs, un tiré au hasard à chaque paquet muté.
-- `fuzz_priority` — filtre supplémentaire sur le catalogue, appliqué **quel
-  que soit le `mode`** (y compris `all`/`cross_app`/`naive`/`stateful`, pas
-  seulement `single_app`/`multi_app`).
 - `fsm_dir` — dossier des définitions de machines d'état (YAML) utilisées en
-  mode `stateful`. Par défaut `/home/jstar/Desktop/maya3/patterns/stateful`
-  — **ce mode dépend donc d'un projet externe** (`maya3`) qui génère ces
-  fichiers ; un `.yaml` invalide dans ce dossier est simplement ignoré
-  (message sur stderr), le fuzzing continue avec les FSM restantes.
-- `seed_count`, `naive_batch_size`, `cross_app_min_tc`, `cross_app_max_tc`, etc.
+  mode `stateful`. Par défaut `fsm/` (copié une fois depuis `maya3`, ce mode
+  ne dépend plus d'un projet externe) ; un `.yaml` invalide dans ce dossier
+  est simplement ignoré (message sur stderr), le fuzzing continue avec les
+  FSM restantes.
+- `naive_batch_size`, `cross_app_min_tc`, `cross_app_max_tc`, etc.
+
+Le fuzzing part toujours d'une seule séquence initiale (générée selon `mode`,
+ou chargée depuis `state_sequences/<COMPOSANT>.json` avec `--component`),
+puis la boucle infinie (jusqu'à Ctrl+C) la mute et fait grossir le corpus au
+fil des séquences jugées intéressantes — il n'y a pas de paramètre pour
+partir de plusieurs seeds ni pour fournir une liste de seeds personnalisées.
 
 ### `mode` — les 6 valeurs possibles
 
@@ -129,8 +132,7 @@ Quelques comportements moins évidents à la lecture :
 
 **Ctrl+C** :
 - 1 fois → annule la séquence en cours et attend 3s (fenêtre pour un second
-  Ctrl+C) avant de redémarrer NOS3 proprement et continuer. Ce redémarrage a
-  lieu **même si aucune séquence n'était en cours** au moment du Ctrl+C.
+  Ctrl+C) avant de redémarrer NOS3 proprement et continuer. 
 - 2 fois rapprochées → arrêt total.
 
 Le redémarrage automatique **sur crash détecté** (pas Ctrl+C) est un chemin
@@ -152,8 +154,7 @@ Une séquence est gardée en corpus si la clé
 (ex: `"NOVATEL_OEM615_NOOP_CC:OK|DROP_SB_ERROR"`) n'a jamais été vue. Cette
 clé ignore le nom des commandes 2, 3, ... d'une séquence multi-commandes
 (modes `all`/`cross_app`) : seule la 1ère commande et l'enchaînement des
-verdicts comptent pour la déduplication. Une séquence tuée par Ctrl+C
-(`killed_flag`) est systématiquement exclue du corpus.
+verdicts comptent pour la déduplication. Une séquence tuée par Ctrl+C est systématiquement exclue du corpus.
 
 ---
 
@@ -177,8 +178,7 @@ value   = "0x05"
 
 Chaque entrée est appliquée **après** la mutation automatique, à chaque
 paquet généré. **Sans le flag `--fixed-fields`, aucun override n'est
-appliqué** — le fuzzing reste 100% automatique. Pour changer, on relance
-`cargo run` avec ou sans le flag (ou avec un autre fichier).
+appliqué** — le fuzzing reste 100% automatique.
 
 ---
 
@@ -207,11 +207,6 @@ sans avoir à éditer le JSON à la main.
 
 Sans `--component`, comportement inchangé : génération selon `mode` dans
 `fuzz_config.toml` (section 1).
-
-Les fichiers `state_sequences/*.json` contiennent aussi des champs
-`mandatory`, `mutation` et `replay` par commande. **Ils ne sont jamais lus
-par le code Rust — seul `fuzz` a un effet réel.** Ne pas compter sur
-`mandatory: true` pour protéger une commande : il faut `fuzz: false`.
 
 ---
 
@@ -266,8 +261,12 @@ reste du mot vient du template `tc_name`.
 
 ### `[secondary_header]` — Function Code + Checksum
 
-N'a de sens que si `header.sec_hdr_flag = 1`. Remplace les anciens overrides
-génériques sur `"FC"`/`"CHECKSUM"` :
+Le bit `sec_hdr_flag` (dans `[header]`) indique, au sens du standard
+CCSDS/cFS, si un secondary header est présent — ce n'est pas une règle
+inventée par cet outil. Mais **le code n'impose rien** : `[secondary_header]`
+est appliqué tel quel même si `sec_hdr_flag = 0`, donc tu peux volontairement
+envoyer un paquet incohérent (FC/CHECKSUM renseignés sans secondary header
+déclaré) pour voir comment NOS3 réagit à ce cas normalement invalide :
 
 ```toml
 [secondary_header]
@@ -328,19 +327,20 @@ Déroulement :
 Seule la **vraie HK** est capturée (`MsgId` de l'app ciblée avec `is_TC=0`) —
 commandes, events EVS (ex: `MsgId=0808`, canal partagé texte) et trafic des
 autres apps sur le bus sont exclus. Résultat dans `hk_phase1_baseline.csv` /
-`hk_phase2_mutated.csv` / `hk_phase3_replay.csv` (tableau lisible, colonnes
-alignées, hex des gros paquets tronqué avec le nombre d'octets omis).
+`hk_phase2_mutated.csv` / `hk_phase3_replay.csv` 
 
-Le `MsgId` HK attendu pour une app n'est pas lu depuis une source de vérité
-indépendante : il est **dérivé par calcul** du `MsgId` de la commande envoyée
-(bit 12 "Type" mis à 0). Cette heuristique n'a été validée empiriquement que
-sur un seul composant (`NOVATEL_OEM615` : commande `ID=0x1870` → HK
-`MsgId=0x0870`) — à vérifier si elle n'est pas vraie pour un autre composant.
-Chaque phase attend jusqu'à 20s (`HK_MAX_WAIT`) qu'une ligne HK avec ce
-`MsgId` apparaisse dans `/tmp/logids_p3.csv` (lu via `docker exec` dans le
-conteneur `sc01-nos-fsw`) ; si rien n'apparaît, la phase continue quand même
-avec ce qui a été capturé et affiche un avertissement (`⚠`) — le CSV produit
-peut donc être vide ou incomplet sans que l'outil s'arrête.
+Le `MsgId` HK attendu pour chaque app vient d'une table (`CMD_TO_HK_MID`
+dans `hk_diff_test.rs`) construite à partir des headers `*_msgids.h` du
+dépôt NOS3 — la vraie source de vérité, pas une supposition — et couvre les
+30 apps du catalogue. Ce n'est **pas** un simple calcul (bit 12 à 0) : 8 apps
+sur 30 (CF, DS, ES, FM, LC, SBN, SC, SCH) ont un `MsgId` HK qui ne se déduit
+pas directement du `MsgId` de commande. Si un jour NOS3 ajoute une app
+absente de cette table, l'outil retombe sur ce calcul approximatif et
+prévient sur stderr (`⚠ MsgId ... absent de CMD_TO_HK_MID`).
+
+Chaque phase attend au maximum 20s la HK attendue ; si rien n'arrive dans ce
+délai, l'outil continue quand même et affiche `⚠` — le CSV peut alors être
+incomplet.
 
 ---
 
@@ -348,8 +348,7 @@ peut donc être vide ou incomplet sans que l'outil s'arrête.
 
 Chaque crash détecté pendant `cargo run` est sauvegardé dans `./crashes/`
 sous forme de fichier JSON (même format que ce que `wrapper.py` reçoit sur
-stdin) — pas besoin d'outil, le fichier se lit directement (`cat` ou ouvrir
-dans l'éditeur), et se rejoue tel quel :
+stdin) :
 
 ```bash
 cat crashes/1c2db06eb88b2a4c              # lisible directement
@@ -360,10 +359,7 @@ Chaque hash a aussi deux fichiers annexes internes à LibAFL (à ignorer) :
 `.{hash}` (compteur) et `.{hash}_1.metadata` (exec_time/executions).
 
 Tout ce qui atterrit dans `./crashes/` est automatiquement en JSON — aucune
-étape manuelle, aucune commande à lancer. C'est garanti par la surcharge de
-`to_file`/`from_file` dans `src/input.rs` (voir `impl Input for
-CcsdsSequenceInput`), qui remplace le format binaire par défaut de LibAFL.
-
+étape manuelle, aucune commande à lancer. 
 ---
 
 ## 7. Rejouer une séquence câblée en dur — scripts Python
@@ -399,7 +395,7 @@ tail -f /home/jstar/Desktop/github-nos3/maya_feedback.log
 
 ---
 
-## Structure du projet (pour s'y retrouver)
+## Structure du projet 
 
 ```
 src/

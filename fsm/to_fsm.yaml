@@ -1,0 +1,110 @@
+app_name: "TO"
+msgid: "0x1880"
+description: "Telemetry Output — routes cFS SB telemetry packets to downlink channels (UDP/serial/etc.) via configurable routing table; starts disabled"
+stateless: false
+
+states:
+  - DISABLED
+  - ENABLED
+  - PAUSED
+
+transitions:
+  - from: DISABLED
+    to: ENABLED
+    tc_fc: 2
+    tc_name: "TO_ENABLE_OUTPUT_CC"
+    mandatory: true
+    fuzz: false
+    notes: "Sets usOutputEnabled=1 and usOutputActive=1. Without this, all telemetry data is dropped from pipes. Must be sent to begin downlink."
+
+  - from: ENABLED
+    to: PAUSED
+    tc_fc: 4
+    tc_name: "TO_PAUSE_OUTPUT_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Sets usOutputActive=0; output gated to paused. Useful for investigating flow issues."
+
+  - from: PAUSED
+    to: ENABLED
+    tc_fc: 5
+    tc_name: "TO_RESUME_OUTPUT_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Sets usOutputActive=1; resumes output."
+
+  - from: ENABLED
+    to: DISABLED
+    tc_fc: 3
+    tc_name: "TO_DISABLE_OUTPUT_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Sets usOutputEnabled=0; halts all downlink."
+
+commands_always_valid:
+  - tc_fc: 0
+    tc_name: "TO_NOOP_CC"
+    notes: "Standard cFS NOOP"
+  - tc_fc: 1
+    tc_name: "TO_RESET_COUNTERS_CC"
+    notes: "Reset HK counters"
+  - tc_fc: 6
+    tc_name: "TO_ADD_TBL_ENTRY_CC"
+    notes: "Adds a MID to routing table. No state guard."
+    fuzz: true
+  - tc_fc: 7
+    tc_name: "TO_REMOVE_TBL_ENTRY_CC"
+    notes: "Removes a MID from routing table."
+    fuzz: true
+  - tc_fc: 8
+    tc_name: "TO_ENABLE_TBL_ENTRY_CC"
+    notes: "Enables a routing table entry by MID."
+    fuzz: true
+  - tc_fc: 9
+    tc_name: "TO_DISABLE_TBL_ENTRY_CC"
+    notes: "Disables a routing table entry by MID."
+    fuzz: true
+  - tc_fc: 10
+    tc_name: "TO_ENABLE_GROUP_CC"
+    notes: "Enables a group of routing table entries."
+    fuzz: true
+  - tc_fc: 11
+    tc_name: "TO_DISABLE_GROUP_CC"
+    notes: "Disables a group of routing table entries."
+    fuzz: true
+  - tc_fc: 12
+    tc_name: "TO_ENABLE_ALL_CC"
+    notes: "Enables all routing table entries."
+    fuzz: true
+  - tc_fc: 13
+    tc_name: "TO_DISABLE_ALL_CC"
+    notes: "Disables all routing table entries — blackout of all telemetry."
+    fuzz: true
+  - tc_fc: 14
+    tc_name: "TO_SET_ROUTE_BY_MID_CC"
+    notes: "Sets routing for a specific MID."
+    fuzz: true
+  - tc_fc: 15
+    tc_name: "TO_SET_ROUTE_BY_GROUP_CC"
+    notes: "Sets routing for a group."
+    fuzz: true
+  - tc_fc: 16
+    tc_name: "TO_MANAGE_TABLE_CC"
+    notes: "Manages (updates) the configuration table."
+    fuzz: true
+  - tc_fc: 17
+    tc_name: "TO_ACTIVATE_ROUTES_CC"
+    notes: "Activates specified routes."
+    fuzz: true
+  - tc_fc: 18
+    tc_name: "TO_DEACTIVATE_ROUTES_CC"
+    notes: "Deactivates specified routes."
+    fuzz: true
+  - tc_fc: 19
+    tc_name: "TO_SET_ROUTE_PERIOD_CC"
+    notes: "Sets wakeup period for a route."
+    fuzz: true
+  - tc_fc: 20
+    tc_name: "TO_SET_WAKEUP_TIMEOUT_CC"
+    notes: "Sets the TO wakeup timeout."
+    fuzz: true

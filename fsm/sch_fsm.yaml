@@ -1,0 +1,45 @@
+app_name: "SCH"
+msgid: "0x1895"
+description: "Scheduler — table-driven message scheduling that fires telemetry/command messages at specified rates synchronized to major frame timing"
+stateless: false
+
+states:
+  - UNSYNCHRONIZED
+  - SYNCHRONIZED
+
+transitions:
+  - from: UNSYNCHRONIZED
+    to: SYNCHRONIZED
+    tc_fc: 6
+    tc_name: "SCH_ENABLE_SYNC_CC"
+    mandatory: true
+    fuzz: false
+    notes: "Enables major frame synchronization. Without this SCH operates on minor frame timing only. Required for precise scheduling."
+
+commands_always_valid:
+  - tc_fc: 0
+    tc_name: "SCH_NOOP_CC"
+    notes: "Standard cFS NOOP"
+  - tc_fc: 1
+    tc_name: "SCH_RESET_CC"
+    notes: "Reset HK counters"
+  - tc_fc: 2
+    tc_name: "SCH_ENABLE_CC"
+    notes: "Enables a specific schedule table entry. Takes SlotNumber and EntryNumber parameters."
+    fuzz: true
+  - tc_fc: 3
+    tc_name: "SCH_DISABLE_CC"
+    notes: "Disables a specific schedule table entry. Stops message from being sent."
+    fuzz: true
+  - tc_fc: 4
+    tc_name: "SCH_ENABLE_GROUP_CC"
+    notes: "Enables a group of schedule entries."
+    fuzz: true
+  - tc_fc: 5
+    tc_name: "SCH_DISABLE_GROUP_CC"
+    notes: "Disables a group of schedule entries — can silence many apps at once."
+    fuzz: true
+  - tc_fc: 7
+    tc_name: "SCH_SEND_DIAG_TLM_CC"
+    notes: "Sends diagnostic telemetry message with scheduling status."
+    fuzz: true

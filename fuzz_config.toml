@@ -26,15 +26,6 @@ mode = "cross_app"
 #
 apps = ["NOVATEL_OEM615"]
 
-# ─── FILTRE PAR PRIORITÉ ──────────────────────────────────────────────────────
-# Optionnel — commenter pour fuzzer toutes les priorités.
-# Valeurs : "CRITICAL" | "HIGH" | "MEDIUM" | "NORMAL"
-#
-# fuzz_priority = "CRITICAL"
-
-# ─── SEEDS INITIALES ──────────────────────────────────────────────────────────
-seed_count = 8
-
 # ─── PARAMÈTRES CROSS-APP ─────────────────────────────────────────────────────
 # Actifs uniquement si mode = "cross_app".
 #
@@ -50,9 +41,11 @@ naive_batch_size = 10
 
 # ─── PARAMÈTRES STATEFUL ──────────────────────────────────────────────────────
 # Actif uniquement si mode = "stateful".
-# Répertoire contenant les FSM YAMLs générés pour chaque app NOS3.
+# Répertoire contenant les FSM YAMLs générés pour chaque app NOS3 — copiées
+# une fois dans ce projet (fsm/) depuis maya3/patterns/stateful, plus besoin
+# de ce projet externe pour lancer le mode stateful.
 #
-fsm_dir = "/home/jstar/Desktop/maya3/patterns/stateful"
+fsm_dir = "fsm"
 
 # ─── MUTATEURS ──────────────────────────────────────────────────────────────
 # Optionnel — commenter (ou supprimer) pour utiliser tous les mutateurs

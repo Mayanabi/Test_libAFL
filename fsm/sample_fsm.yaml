@@ -1,0 +1,37 @@
+app_name: "SAMPLE"
+msgid: "0x18FA"
+description: "Sample component app — template demonstrating the NOS3 ENABLE/DISABLE device driver pattern with SPI/UART device interface"
+stateless: false
+
+states:
+  - DISABLED
+  - ENABLED
+
+transitions:
+  - from: DISABLED
+    to: ENABLED
+    tc_fc: 2
+    tc_name: "SAMPLE_ENABLE_CC"
+    mandatory: true
+    fuzz: false
+    notes: "Opens device interface; sets DeviceEnabled=SAMPLE_DEVICE_ENABLED. Device data telemetry only sent when enabled."
+
+  - from: ENABLED
+    to: DISABLED
+    tc_fc: 3
+    tc_name: "SAMPLE_DISABLE_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Closes device interface; sets DeviceEnabled=SAMPLE_DEVICE_DISABLED."
+
+commands_always_valid:
+  - tc_fc: 0
+    tc_name: "SAMPLE_NOOP_CC"
+    notes: "Standard cFS NOOP"
+  - tc_fc: 1
+    tc_name: "SAMPLE_RST_COUNTERS_CC"
+    notes: "Reset HK counters"
+  - tc_fc: 4
+    tc_name: "SAMPLE_CONFIG_CC"
+    notes: "Write configuration to device. Requires ENABLED state to have effect. Takes DeviceCfg parameter."
+    fuzz: true

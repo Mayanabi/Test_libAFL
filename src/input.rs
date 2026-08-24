@@ -81,14 +81,11 @@ pub struct CcsdsCommand {
     pub step:         i32,
     pub tc_name:      String,
     pub fuzz:         bool,
-    pub mandatory:    bool,
     pub delay_min_ms: u32,
     pub delay_max_ms: u32,
     pub args:         Vec<CcsdsArg>,
     pub target:       String,
     pub port:         u16,
-    pub mutation:     String,
-    pub replay:       bool,
 }
 
 /// Input LibAFL : séquence ordonnée de commandes CCSDS.
@@ -868,7 +865,6 @@ mod tests {
                 step: 1,
                 tc_name: "CFE_ES_NOOP_CC".into(),
                 fuzz: true,
-                mandatory: false,
                 delay_min_ms: 0,
                 delay_max_ms: 0,
                 args: vec![CcsdsArg {
@@ -880,8 +876,6 @@ mod tests {
                 }],
                 target: "CFS".into(),
                 port: 5012,
-                mutation: "havoc".into(),
-                replay: false,
             }],
         };
 
@@ -910,14 +904,11 @@ mod tests {
                 step: 1,
                 tc_name: "CFE_ES_NOOP_CC".into(),
                 fuzz: true,
-                mandatory: false,
                 delay_min_ms: 0,
                 delay_max_ms: 0,
                 args: vec![],
                 target: "CFS".into(),
                 port: 5012,
-                mutation: "havoc".into(),
-                replay: false,
             }],
         };
 

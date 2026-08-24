@@ -1,0 +1,71 @@
+app_name: "MGR"
+msgid: "0x18F8"
+description: "Mission Manager — tracks spacecraft operational mode (SAFE/SCIENCE), manages boot counters, reboot preparation, and science pass counting"
+stateless: false
+
+states:
+  - SAFE_MODE
+  - SAFE_REBOOT_MODE
+  - SCIENCE_MODE
+  - SCIENCE_REBOOT_MODE
+
+transitions:
+  - from: SAFE_MODE
+    to: SCIENCE_MODE
+    tc_fc: 2
+    tc_name: "MGR_SET_MODE_CC"
+    mandatory: true
+    fuzz: false
+    notes: "Sets SpacecraftMode=MGR_SCIENCE_MODE (3). REBOOT_PREP_CC only executes when in SCIENCE_MODE or SCIENCE_REBOOT_MODE. Also enables subsystem components via separate EPS switch commands."
+
+  - from: SCIENCE_MODE
+    to: SAFE_MODE
+    tc_fc: 2
+    tc_name: "MGR_SET_MODE_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Sets SpacecraftMode=MGR_SAFE_MODE (1). Transitions back to safe operations."
+
+  - from: SCIENCE_MODE
+    to: SCIENCE_REBOOT_MODE
+    tc_fc: 3
+    tc_name: "MGR_REBOOT_PREP_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Sets SpacecraftMode=MGR_SCIENCE_REBOOT_MODE (4). Only valid when already in SCIENCE_MODE."
+
+  - from: SAFE_MODE
+    to: SAFE_REBOOT_MODE
+    tc_fc: 3
+    tc_name: "MGR_REBOOT_PREP_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Sets SpacecraftMode=MGR_SAFE_REBOOT_MODE (2). Prepares safe reboot."
+
+commands_always_valid:
+  - tc_fc: 0
+    tc_name: "MGR_NOOP_CC"
+    notes: "Standard cFS NOOP"
+  - tc_fc: 1
+    tc_name: "MGR_RST_COUNTERS_CC"
+    notes: "Reset HK counters"
+  - tc_fc: 4
+    tc_name: "MGR_SCIPASS_COUNT_INC_CC"
+    notes: "Increment science pass counter. Tracks number of completed science passes."
+    fuzz: true
+  - tc_fc: 5
+    tc_name: "MGR_SCIPASS_COUNT_RESET_CC"
+    notes: "Reset science pass counter to zero."
+    fuzz: true
+  - tc_fc: 6
+    tc_name: "MGR_SET_AK_CC"
+    notes: "Enable/disable Alaska ground station region. Param: AK_STATUS (uint8, 0=DISABLE, 1=ENABLE)."
+    fuzz: true
+  - tc_fc: 7
+    tc_name: "MGR_SET_CONUS_CC"
+    notes: "Enable/disable CONUS region. Param: CONUS_STATUS (uint8, 0=DISABLE, 1=ENABLE)."
+    fuzz: true
+  - tc_fc: 8
+    tc_name: "MGR_SET_HI_CC"
+    notes: "Enable/disable Hawaii region. Param: HI_STATUS (uint8, 0=DISABLE, 1=ENABLE)."
+    fuzz: true

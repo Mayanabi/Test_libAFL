@@ -1,0 +1,41 @@
+app_name: "GENERIC_REACTION_WHEEL"
+msgid: "0x1992"
+description: "Generic Reaction Wheel (RW) driver — controls up to 3 reaction wheels via UART; wheels start ENABLED by default; SET_TORQUE is primary actuator command"
+stateless: false
+
+states:
+  - RW_DISABLED
+  - RW_ENABLED
+
+transitions:
+  - from: RW_DISABLED
+    to: RW_ENABLED
+    tc_fc: 4
+    tc_name: "GENERIC_RW_ENABLE_CC"
+    mandatory: true
+    fuzz: false
+    notes: "Re-enables a disabled wheel. DeviceEnabled_RW0/1/2 set to GENERIC_RW_DEVICE_ENABLED. Note: wheels initialize as ENABLED by default so this is only needed after disable."
+
+  - from: RW_ENABLED
+    to: RW_DISABLED
+    tc_fc: 5
+    tc_name: "GENERIC_RW_DISABLE_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Disables a specific wheel. SET_TORQUE_CC returns error if wheel is disabled."
+
+commands_always_valid:
+  - tc_fc: 0
+    tc_name: "GENERIC_RW_NOOP_CC"
+    notes: "Standard cFS NOOP"
+  - tc_fc: 1
+    tc_name: "GENERIC_RW_RST_COUNTERS_CC"
+    notes: "Reset HK counters"
+  - tc_fc: 2
+    tc_name: "GENERIC_RW_REQ_DATA_CC"
+    notes: "Request device data telemetry from all enabled wheels."
+    fuzz: true
+  - tc_fc: 3
+    tc_name: "GENERIC_RW_SET_TORQUE_CC"
+    notes: "Set wheel torque command. Takes WheelNumber (0-2) and Torque (float). SENSITIVE: directly controls spacecraft attitude via momentum transfer. Requires wheel ENABLED."
+    fuzz: true

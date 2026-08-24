@@ -4,86 +4,239 @@
       "step": 1,
       "tc_name": "CF_NOOP_CC",
       "fuzz": false,
-      "mandatory": true,
       "delay_min_ms": 300,
       "delay_max_ms": 300,
       "args": [
-        { "name": "ID", "arg_type": "UINT", "size_bits": 16, "value": "0x18B3", "endianness": "BIG" },
-        { "name": "SEQ", "arg_type": "UINT", "size_bits": 16, "value": "0xC000", "endianness": "BIG" },
-        { "name": "LEN", "arg_type": "UINT", "size_bits": 16, "value": "0x0001", "endianness": "BIG" },
-        { "name": "FC", "arg_type": "UINT", "size_bits": 8, "value": "0x00", "endianness": "BIG" },
-        { "name": "CHECKSUM", "arg_type": "UINT", "size_bits": 8, "value": "0x00", "endianness": "BIG" }
+        {
+          "name": "ID",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x18B3",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SEQ",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0xC000",
+          "endianness": "BIG"
+        },
+        {
+          "name": "LEN",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x0001",
+          "endianness": "BIG"
+        },
+        {
+          "name": "FC",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x00",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CHECKSUM",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x00",
+          "endianness": "BIG"
+        }
       ],
       "target": "CFS",
-      "port": 5012,
-      "mutation": "none",
-      "replay": true
+      "port": 5012
     },
     {
       "step": 2,
       "tc_name": "CF_ENABLE_DEQUEUE_CC",
       "fuzz": false,
-      "mandatory": true,
       "delay_min_ms": 300,
       "delay_max_ms": 300,
       "args": [
-        { "name": "ID", "arg_type": "UINT", "size_bits": 16, "value": "0x18B3", "endianness": "BIG" },
-        { "name": "SEQ", "arg_type": "UINT", "size_bits": 16, "value": "0xC000", "endianness": "BIG" },
-        { "name": "LEN", "arg_type": "UINT", "size_bits": 16, "value": "0x0001", "endianness": "BIG" },
-        { "name": "FC", "arg_type": "UINT", "size_bits": 8, "value": "0x10", "endianness": "BIG" },
-        { "name": "CHECKSUM", "arg_type": "UINT", "size_bits": 8, "value": "0x00", "endianness": "BIG" },
-        { "name": "CHAN", "arg_type": "UINT", "size_bits": 8, "value": "0" }
+        {
+          "name": "ID",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x18B3",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SEQ",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0xC000",
+          "endianness": "BIG"
+        },
+        {
+          "name": "LEN",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x0001",
+          "endianness": "BIG"
+        },
+        {
+          "name": "FC",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x10",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CHECKSUM",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x00",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CHAN",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0"
+        }
       ],
       "target": "CFS",
-      "port": 5012,
-      "mutation": "none",
-      "replay": true
+      "port": 5012
     },
     {
       "step": 3,
       "tc_name": "CF_TX_FILE_CC",
       "fuzz": true,
-      "mandatory": true,
       "delay_min_ms": 300,
       "delay_max_ms": 300,
       "args": [
-        { "name": "ID", "arg_type": "UINT", "size_bits": 16, "value": "0x18B3", "endianness": "BIG" },
-        { "name": "SEQ", "arg_type": "UINT", "size_bits": 16, "value": "0xC000", "endianness": "BIG" },
-        { "name": "LEN", "arg_type": "UINT", "size_bits": 16, "value": "0x0001", "endianness": "BIG" },
-        { "name": "FC", "arg_type": "UINT", "size_bits": 8, "value": "0x02", "endianness": "BIG" },
-        { "name": "CHECKSUM", "arg_type": "UINT", "size_bits": 8, "value": "0x00", "endianness": "BIG" },
-        { "name": "CLASS", "arg_type": "UINT", "size_bits": 8, "value": "1" },
-        { "name": "KEEP", "arg_type": "UINT", "size_bits": 8, "value": "1" },
-        { "name": "CHAN_NUM", "arg_type": "UINT", "size_bits": 8, "value": "0" },
-        { "name": "PRIORITY", "arg_type": "UINT", "size_bits": 8, "value": "5" },
-        { "name": "DEST_ID", "arg_type": "UINT", "size_bits": 32, "value": "23" },
-        { "name": "SRCFILENAME", "arg_type": "STRING", "size_bits": 512, "value": "\"/cf/cfe_es_startup.scr\"" },
-        { "name": "DSTFILENAME", "arg_type": "STRING", "size_bits": 512, "value": "\"/cf/cfe_es_startup_copy.scr\"" }
+        {
+          "name": "ID",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x18B3",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SEQ",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0xC000",
+          "endianness": "BIG"
+        },
+        {
+          "name": "LEN",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x0001",
+          "endianness": "BIG"
+        },
+        {
+          "name": "FC",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x02",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CHECKSUM",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x00",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CLASS",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "1"
+        },
+        {
+          "name": "KEEP",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "1"
+        },
+        {
+          "name": "CHAN_NUM",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0"
+        },
+        {
+          "name": "PRIORITY",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "5"
+        },
+        {
+          "name": "DEST_ID",
+          "arg_type": "UINT",
+          "size_bits": 32,
+          "value": "23"
+        },
+        {
+          "name": "SRCFILENAME",
+          "arg_type": "STRING",
+          "size_bits": 512,
+          "value": "\"/cf/cfe_es_startup.scr\""
+        },
+        {
+          "name": "DSTFILENAME",
+          "arg_type": "STRING",
+          "size_bits": 512,
+          "value": "\"/cf/cfe_es_startup_copy.scr\""
+        }
       ],
       "target": "CFS",
-      "port": 5012,
-      "mutation": "none",
-      "replay": true
+      "port": 5012
     },
     {
       "step": 4,
       "tc_name": "CF_RESET_COUNTERS_CC",
       "fuzz": true,
-      "mandatory": true,
       "delay_min_ms": 0,
       "delay_max_ms": 0,
       "args": [
-        { "name": "ID", "arg_type": "UINT", "size_bits": 16, "value": "0x18B3", "endianness": "BIG" },
-        { "name": "SEQ", "arg_type": "UINT", "size_bits": 16, "value": "0xC000", "endianness": "BIG" },
-        { "name": "LEN", "arg_type": "UINT", "size_bits": 16, "value": "0x0001", "endianness": "BIG" },
-        { "name": "FC", "arg_type": "UINT", "size_bits": 8, "value": "0x01", "endianness": "BIG" },
-        { "name": "CHECKSUM", "arg_type": "UINT", "size_bits": 8, "value": "0x00", "endianness": "BIG" },
-        { "name": "VALUE", "arg_type": "UINT", "size_bits": 8, "value": "0" }
+        {
+          "name": "ID",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x18B3",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SEQ",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0xC000",
+          "endianness": "BIG"
+        },
+        {
+          "name": "LEN",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x0001",
+          "endianness": "BIG"
+        },
+        {
+          "name": "FC",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x01",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CHECKSUM",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x00",
+          "endianness": "BIG"
+        },
+        {
+          "name": "VALUE",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0"
+        }
       ],
       "target": "CFS",
-      "port": 5012,
-      "mutation": "none",
-      "replay": true
+      "port": 5012
     }
   ]
 }

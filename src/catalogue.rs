@@ -22,20 +22,18 @@ pub struct CatalogueArg {
 }
 
 /// Un template TC complet tel que stocké dans catalogue_dump.json.
-/// Les champs `app`, `stateless`, `fuzz_priority` sont lus du JSON et
-/// disponibles pour filtrage futur (par app, par priorité, stateless-only).
+/// Les champs `app`, `stateless` sont lus du JSON et disponibles pour
+/// filtrage futur (par app, stateless-only).
 #[allow(dead_code)]
 #[derive(Deserialize, Debug, Clone)]
 pub struct CatalogueEntry {
-    pub port:          u16,
+    pub port:      u16,
     /// "CFS" → endianness little-endian par défaut dans CmdSender.py
-    pub target:        String,
-    pub args:          Vec<CatalogueArg>,
-    pub app:           String,
+    pub target:    String,
+    pub args:      Vec<CatalogueArg>,
+    pub app:       String,
     /// true = la commande peut être envoyée dans n'importe quel état système
-    pub stateless:     bool,
-    /// "CRITICAL", "HIGH", "MEDIUM", "NORMAL"
-    pub fuzz_priority: String,
+    pub stateless: bool,
 }
 
 /// Le catalogue complet : TC_NAME → CatalogueEntry (315 TC pour NOS3 v1.6.2)
@@ -44,7 +42,6 @@ pub type Catalogue = HashMap<String, CatalogueEntry>;
 /// Filtre le catalogue selon la config de campagne.
 /// mode = All → aucun filtre.
 /// mode = SingleApp | MultiApp → garde seulement les TC dont l'app est dans config.apps.
-/// fuzz_priority présent → filtre en plus par priorité.
 pub fn filter(cat: Catalogue, config: &crate::config::FuzzConfig) -> Catalogue {
     use crate::config::FuzzMode;
 
@@ -54,16 +51,7 @@ pub fn filter(cat: Catalogue, config: &crate::config::FuzzConfig) -> Catalogue {
             // All, CrossApp, Naive et Stateful utilisent tout le catalogue.
             let apply_app_filter = matches!(config.mode, FuzzMode::SingleApp | FuzzMode::MultiApp)
                 && !config.apps.is_empty();
-            if apply_app_filter && !config.apps.contains(&entry.app) {
-                return false;
-            }
-            // Filtre optionnel par priorité
-            if let Some(prio) = &config.fuzz_priority {
-                if &entry.fuzz_priority != prio {
-                    return false;
-                }
-            }
-            true
+            !apply_app_filter || config.apps.contains(&entry.app)
         })
         .collect()
 }

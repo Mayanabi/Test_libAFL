@@ -1,0 +1,43 @@
+app_name: "ARDUCAM"
+msgid: "0x18C8"
+description: "Arducam science camera — multi-state science imaging controller; runs a child task for image capture. Only EXP3 and HW_CHECK are active in the ground system."
+stateless: false
+
+# NOTE: FC=2..6 (STOP/PAUSE/RESUME/TIMEOUT/LOW_VOLTAGE) and FC=10..11 (EXP1/EXP2)
+# are commented out in the GSW CMD.txt — not usable from the ground system.
+# Only FC=0,1,12,13 are active.
+
+states:
+  - STOP
+  - RUN
+
+transitions:
+  - from: STOP
+    to: RUN
+    tc_fc: 4
+    tc_name: "CAM_RESUME_CC"
+    mandatory: true
+    fuzz: false
+    notes: "Only reachable via raw CCSDS packet — disabled in GSW. App starts in STOP; EXP3 wakes child task regardless of state."
+
+commands_always_valid:
+  - tc_fc: 0
+    tc_name: "CAM_NOOP_CC"
+    notes: "Standard cFS NOOP"
+  - tc_fc: 1
+    tc_name: "CAM_RESET_COUNTERS_CC"
+    notes: "Reset HK counters"
+  - tc_fc: 12
+    tc_name: "CAM_EXP3_CC"
+    notes: "Trigger large image capture. Active in GSW. Wakes child task via semaphore."
+    fuzz: true
+  - tc_fc: 13
+    tc_name: "CAM_HW_CHECK_CC"
+    notes: "I2C/SPI hardware connectivity check. Active in GSW."
+    fuzz: true
+
+hk_cmd:
+  msgid24: "0x18C9"
+  tc_fc: 0
+  tc_name: "CAM_SEND_HK_CC"
+  notes: "HK request uses a separate MsgId (0x18C9)."

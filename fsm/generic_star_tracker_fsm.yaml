@@ -1,0 +1,37 @@
+app_name: "GENERIC_STAR_TRACKER"
+msgid: "0x1935"
+description: "Generic Star Tracker driver — UART-based quaternion attitude determination from star field; publishes star tracker telemetry when enabled"
+stateless: false
+
+states:
+  - DISABLED
+  - ENABLED
+
+transitions:
+  - from: DISABLED
+    to: ENABLED
+    tc_fc: 2
+    tc_name: "GENERIC_STAR_TRACKER_ENABLE_CC"
+    mandatory: true
+    fuzz: false
+    notes: "Opens UART port; sets DeviceEnabled=GENERIC_STAR_TRACKER_DEVICE_ENABLED. Star tracker quaternion telemetry only published when enabled. Required for ADCS inertial mode."
+
+  - from: ENABLED
+    to: DISABLED
+    tc_fc: 3
+    tc_name: "GENERIC_STAR_TRACKER_DISABLE_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Closes UART port; stops star tracker data publication."
+
+commands_always_valid:
+  - tc_fc: 0
+    tc_name: "GENERIC_STAR_TRACKER_NOOP_CC"
+    notes: "Standard cFS NOOP"
+  - tc_fc: 1
+    tc_name: "GENERIC_STAR_TRACKER_RST_COUNTERS_CC"
+    notes: "Reset HK counters"
+  - tc_fc: 4
+    tc_name: "GENERIC_STAR_TRACKER_CONFIG_CC"
+    notes: "Write configuration to star tracker. Takes configuration payload."
+    fuzz: true

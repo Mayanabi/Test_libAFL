@@ -1,0 +1,41 @@
+app_name: "NOVATEL_OEM615"
+msgid: "0x1870"
+description: "Novatel OEM615 GPS receiver driver — enables/disables UART-connected GPS unit and manages log/unlog commands for NMEA/OEM messages"
+stateless: false
+
+states:
+  - DISABLED
+  - ENABLED
+
+transitions:
+  - from: DISABLED
+    to: ENABLED
+    tc_fc: 2
+    tc_name: "NOVATEL_OEM615_ENABLE_CC"
+    mandatory: true
+    fuzz: false
+    notes: "Opens UART port; sets DeviceEnabled=NOVATEL_OEM615_DEVICE_ENABLED. LOG/UNLOG commands and data telemetry only work when enabled."
+
+  - from: ENABLED
+    to: DISABLED
+    tc_fc: 3
+    tc_name: "NOVATEL_OEM615_DISABLE_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Closes UART port; stops GPS data output."
+
+commands_always_valid:
+  - tc_fc: 0
+    tc_name: "NOVATEL_OEM615_NOOP_CC"
+    notes: "Standard cFS NOOP"
+  - tc_fc: 1
+    tc_name: "NOVATEL_OEM615_RST_COUNTERS_CC"
+    notes: "Reset HK counters"
+  - tc_fc: 4
+    tc_name: "NOVATEL_OEM615_LOG_CC"
+    notes: "Send LOG command to GPS receiver. Requires ENABLED. Takes log type and rate parameters."
+    fuzz: true
+  - tc_fc: 5
+    tc_name: "NOVATEL_OEM615_UNLOG_CC"
+    notes: "Send UNLOG command to GPS receiver. Requires ENABLED. Takes log type parameter."
+    fuzz: true

@@ -1,0 +1,112 @@
+app_name: "SC"
+msgid: "0x18A9"
+description: "Stored Command — executes pre-loaded time-tagged command sequences (ATS) and relative-time command sequences (RTS); supports two ATS slots (A and B)"
+stateless: false
+
+states:
+  - ATS_IDLE
+  - ATS_EXECUTING
+  - RTS_DISABLED
+  - RTS_ENABLED
+  - RTS_EXECUTING
+
+transitions:
+  - from: ATS_IDLE
+    to: ATS_EXECUTING
+    tc_fc: 2
+    tc_name: "SC_START_ATS_CC"
+    mandatory: true
+    fuzz: false
+    notes: "Starts execution of ATS A or B. ATS table must be loaded (via CFE_TBL). Takes ATSId=1(A) or 2(B). Commands execute at their scheduled absolute times."
+
+  - from: ATS_EXECUTING
+    to: ATS_IDLE
+    tc_fc: 3
+    tc_name: "SC_STOP_ATS_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Stops ATS execution immediately."
+
+  - from: ATS_EXECUTING
+    to: ATS_EXECUTING
+    tc_fc: 8
+    tc_name: "SC_SWITCH_ATS_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Switches from executing ATS to the other ATS buffer mid-execution."
+
+  - from: ATS_EXECUTING
+    to: ATS_EXECUTING
+    tc_fc: 9
+    tc_name: "SC_JUMP_ATS_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Jumps ATS execution to a specific time offset. Takes NewTime parameter."
+
+  - from: RTS_DISABLED
+    to: RTS_ENABLED
+    tc_fc: 7
+    tc_name: "SC_ENABLE_RTS_CC"
+    mandatory: true
+    fuzz: false
+    notes: "Enables an RTS so it can be started. RTS is disabled by default. Takes RTSId."
+
+  - from: RTS_ENABLED
+    to: RTS_EXECUTING
+    tc_fc: 4
+    tc_name: "SC_START_RTS_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Starts execution of a specific RTS. Takes RTSId (1-based)."
+
+  - from: RTS_EXECUTING
+    to: RTS_DISABLED
+    tc_fc: 5
+    tc_name: "SC_STOP_RTS_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Stops a running RTS."
+
+  - from: RTS_ENABLED
+    to: RTS_DISABLED
+    tc_fc: 6
+    tc_name: "SC_DISABLE_RTS_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Disables an RTS preventing it from being started."
+
+commands_always_valid:
+  - tc_fc: 0
+    tc_name: "SC_NOOP_CC"
+    notes: "Standard cFS NOOP"
+  - tc_fc: 1
+    tc_name: "SC_RESET_COUNTERS_CC"
+    notes: "Reset HK counters"
+  - tc_fc: 10
+    tc_name: "SC_CONTINUE_ATS_ON_FAILURE_CC"
+    notes: "Sets whether ATS continues executing after a command fails. Takes ContinueState boolean."
+    fuzz: true
+  - tc_fc: 11
+    tc_name: "SC_APPEND_ATS_CC"
+    notes: "Appends commands from append buffer to ATS. Takes ATSId."
+    fuzz: true
+  - tc_fc: 12
+    tc_name: "SC_MANAGE_TABLE_CC"
+    notes: "Manages table update notification."
+    fuzz: true
+  - tc_fc: 13
+    tc_name: "SC_START_RTSGRP_CC"
+    notes: "Starts a group of RTS sequences. Takes FirstRTSId and LastRTSId."
+    fuzz: true
+  - tc_fc: 14
+    tc_name: "SC_STOP_RTSGRP_CC"
+    notes: "Stops a group of RTS sequences."
+    fuzz: true
+  - tc_fc: 15
+    tc_name: "SC_DISABLE_RTSGRP_CC"
+    notes: "Disables a group of RTS sequences."
+    fuzz: true
+  - tc_fc: 16
+    tc_name: "SC_ENABLE_RTSGRP_CC"
+    notes: "Enables a group of RTS sequences."
+    fuzz: true

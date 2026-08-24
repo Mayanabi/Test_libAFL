@@ -44,14 +44,11 @@ pub fn build_command(name: &str, tpl: &CatalogueEntry, step: i32) -> CcsdsComman
         step,
         tc_name:      name.to_owned(),
         fuzz:         true,
-        mandatory:    false,
         delay_min_ms: 0,
         delay_max_ms: 0,
         args:         tpl.args.iter().map(convert_arg).collect(),
         target:       tpl.target.clone(),
         port:         tpl.port,
-        mutation:     "havoc".into(),
-        replay:       false,
     }
 }
 

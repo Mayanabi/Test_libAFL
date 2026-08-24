@@ -27,13 +27,6 @@ pub struct FuzzConfig {
     #[serde(default)]
     pub apps: Vec<String>,
 
-    /// Filtre de priorité optionnel : "CRITICAL" | "HIGH" | "MEDIUM" | "NORMAL"
-    pub fuzz_priority: Option<String>,
-
-    /// Nombre de seeds initiales
-    #[serde(default = "default_seed_count")]
-    pub seed_count: usize,
-
     /// Taille du batch en mode naive (commandes par subprocess)
     #[serde(default = "default_naive_batch")]
     pub naive_batch_size: usize,
@@ -59,12 +52,11 @@ pub struct FuzzConfig {
     pub mutators: Vec<MutatorKind>,
 }
 
-fn default_seed_count()  -> usize  { 8 }
 fn default_naive_batch() -> usize  { 10 }
 fn default_cross_min()   -> usize  { 2 }
 fn default_cross_max()   -> usize  { 5 }
 fn default_fsm_dir()     -> String {
-    "/home/jstar/Desktop/maya3/patterns/stateful".to_string()
+    "fsm".to_string()
 }
 fn default_mutators()    -> Vec<MutatorKind> { MutatorKind::ALL.to_vec() }
 

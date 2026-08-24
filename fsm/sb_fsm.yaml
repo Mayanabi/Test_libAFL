@@ -1,0 +1,75 @@
+app_name: "SB"
+msgid: "0x1803"
+description: "cFE Software Bus — routes CCSDS messages between cFS app pipes via a publish-subscribe model. ENABLE/DISABLE_ROUTE commands control whether a specific (MsgId, PipeId) destination receives messages. Routes must already exist (pipe must be subscribed) before enable/disable applies."
+stateless: false
+
+# Source: fsw/cfe/modules/sb/fsw/src/cfe_sb_task.c
+# CFE_SB_EnableRouteCmd() line 414: DestPtr->Active = CFE_SB_ACTIVE
+# CFE_SB_DisableRouteCmd() line 481: DestPtr->Active = CFE_SB_INACTIVE
+# Both require valid MsgId + PipeId AND route to already exist (DestPtr != NULL)
+# If route does not exist: ENBL_RTE1_EID / DSBL_RTE1_EID error — no state change
+# Sub-reporting state: FC=9/10 toggle whether SB sends CFE_SB_ONESUB_TLM_MID on subscribes
+
+states:
+  - ROUTE_ACTIVE
+  - ROUTE_INACTIVE
+
+# Note: State is per (MsgId, PipeId) pair — there is no single global SB state.
+# ENABLE/DISABLE SUB_REPORTING is a separate orthogonal state (FC=9/10).
+
+transitions:
+  - from: ROUTE_ACTIVE
+    to: ROUTE_INACTIVE
+    tc_fc: 5
+    tc_name: "CFE_SB_DISABLE_ROUTE_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Params: MsgId(uint16), Pipe(uint32). Sets DestPtr->Active=INACTIVE for this (MsgId,PipeId). Route must exist or error. FUZZ: MsgId of LC's watchpoint telemetry to blind LC; MsgId of SCH wakeup to sch pipe to stop scheduling."
+
+  - from: ROUTE_INACTIVE
+    to: ROUTE_ACTIVE
+    tc_fc: 4
+    tc_name: "CFE_SB_ENABLE_ROUTE_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Params: MsgId(uint16), Pipe(uint32). Sets DestPtr->Active=ACTIVE. FUZZ: enable a route that was never disabled (idempotent but tests bounds)."
+
+commands_always_valid:
+  - tc_fc: 0
+    tc_name: "CFE_SB_NOOP_CC"
+  - tc_fc: 1
+    tc_name: "CFE_SB_RESET_COUNTERS_CC"
+  - tc_fc: 2
+    tc_name: "CFE_SB_SEND_SB_STATS_CC"
+    notes: "Sends SB statistics telemetry packet — no params."
+  - tc_fc: 3
+    tc_name: "CFE_SB_WRITE_ROUTING_INFO_CC"
+    fuzz: true
+    notes: "Param: Filename(64B). Write routing table to file. FUZZ: path traversal in Filename."
+  - tc_fc: 7
+    tc_name: "CFE_SB_WRITE_PIPE_INFO_CC"
+    fuzz: true
+    notes: "Param: Filename(64B). Write pipe info to file. FUZZ: path traversal."
+  - tc_fc: 8
+    tc_name: "CFE_SB_WRITE_MAP_INFO_CC"
+    fuzz: true
+    notes: "Param: Filename(64B). Write message map to file. FUZZ: path traversal."
+  - tc_fc: 9
+    tc_name: "CFE_SB_ENABLE_SUB_REPORTING_CC"
+    notes: "No params. SB will send CFE_SB_ONESUB_TLM_MID on each future Subscribe call."
+  - tc_fc: 10
+    tc_name: "CFE_SB_DISABLE_SUB_REPORTING_CC"
+    notes: "No params. SB stops reporting subscriptions."
+  - tc_fc: 11
+    tc_name: "CFE_SB_SEND_PREV_SUBS_CC"
+    notes: "No params. Retransmits all existing subscriptions as SB_ALLSUBS_TLM_MID packets."
+
+fuzz_notes:
+  critical:
+    - "FC=5 (DISABLE_ROUTE, MsgId=LC watchpoint TLM, Pipe=LC cmd pipe): LC can no longer evaluate watchpoints — limits never trigger"
+    - "FC=5 (DISABLE_ROUTE, MsgId=SCH wakeup, Pipe=SCH pipe): Stops the scheduler completely"
+    - "FC=5 (DISABLE_ROUTE, MsgId=CI uplink, Pipe=CI pipe): Severs all ground command uplink"
+    - "FC=5 (DISABLE_ROUTE, MsgId=HS watchdog wakeup, Pipe=HS pipe): Kills health monitoring"
+  safe_to_fuzz:
+    - "FC=0,1,2,4,7,8,9,10,11"
+  note: "FC=5 requires knowing valid (MsgId, PipeId) pairs. The routing table (FC=3) should be dumped first to discover active routes."

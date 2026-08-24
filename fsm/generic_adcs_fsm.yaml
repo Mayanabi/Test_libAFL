@@ -1,0 +1,57 @@
+app_name: "GENERIC_ADCS"
+msgid: "0x1940"
+description: "Attitude Determination and Control System (ADCS) — aggregates sensor data, runs AD/GNC/AC algorithms, and commands actuators"
+stateless: false
+
+states:
+  - INIT
+  - RUNNING
+
+transitions:
+  - from: INIT
+    to: RUNNING
+    tc_fc: 2
+    tc_name: "GENERIC_ADCS_SET_MODE_CC"
+    mandatory: true
+    fuzz: false
+    notes: "Sets GNC control mode (BDOT=0, SUNSAFE=1, INERTIAL=2). Must be set before attitude control takes effect."
+
+commands_always_valid:
+  - tc_fc: 0
+    tc_name: "GENERIC_ADCS_NOOP_CC"
+    notes: "Standard cFS NOOP, valid in any state"
+  - tc_fc: 1
+    tc_name: "GENERIC_ADCS_RST_COUNTERS_CC"
+    notes: "Standard cFS reset, valid in any state"
+  - tc_fc: 2
+    tc_name: "GENERIC_ADCS_SET_MODE_CC"
+    notes: "Sets GNC mode (uint8 Mode parameter). No state guard — can be sent any time."
+    fuzz: true
+  - tc_fc: 3
+    tc_name: "GENERIC_ADCS_SEND_DI_CC"
+    notes: "Requests publish of Data Ingest telemetry. No guard."
+    fuzz: true
+  - tc_fc: 4
+    tc_name: "GENERIC_ADCS_SEND_AD_CC"
+    notes: "Requests publish of Attitude Determination telemetry. No guard."
+    fuzz: true
+  - tc_fc: 5
+    tc_name: "GENERIC_ADCS_SEND_GNC_CC"
+    notes: "Requests publish of GNC telemetry. No guard."
+    fuzz: true
+  - tc_fc: 6
+    tc_name: "GENERIC_ADCS_SEND_AC_CC"
+    notes: "Requests publish of Attitude Control telemetry. No guard."
+    fuzz: true
+  - tc_fc: 7
+    tc_name: "GENERIC_ADCS_SEND_DO_CC"
+    notes: "Requests publish of Data Output (actuator) telemetry. No guard."
+    fuzz: true
+  - tc_fc: 8
+    tc_name: "GENERIC_ADCS_SET_MOMENTUM_MANAGEMENT_CC"
+    notes: "Enable/disable momentum management (uint8). No guard."
+    fuzz: true
+  - tc_fc: 9
+    tc_name: "GENERIC_ADCS_INERTIAL_QUATERNION_CC"
+    notes: "Sets commanded quaternion for inertial pointing mode (4x double). No guard but mode=INERTIAL required for effect."
+    fuzz: true

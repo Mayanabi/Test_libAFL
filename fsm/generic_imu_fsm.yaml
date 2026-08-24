@@ -1,0 +1,37 @@
+app_name: "GENERIC_IMU"
+msgid: "0x1925"
+description: "Generic IMU (Inertial Measurement Unit) driver — UART-based 3-axis gyro/accelerometer; publishes angular rate and acceleration telemetry when enabled"
+stateless: false
+
+states:
+  - DISABLED
+  - ENABLED
+
+transitions:
+  - from: DISABLED
+    to: ENABLED
+    tc_fc: 2
+    tc_name: "GENERIC_IMU_ENABLE_CC"
+    mandatory: true
+    fuzz: false
+    notes: "Opens UART port; sets DeviceEnabled=GENERIC_IMU_DEVICE_ENABLED. Device data telemetry only sent when enabled. Required before ADCS can use IMU data."
+
+  - from: ENABLED
+    to: DISABLED
+    tc_fc: 3
+    tc_name: "GENERIC_IMU_DISABLE_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Closes UART port; stops IMU data publication."
+
+commands_always_valid:
+  - tc_fc: 0
+    tc_name: "GENERIC_IMU_NOOP_CC"
+    notes: "Standard cFS NOOP"
+  - tc_fc: 1
+    tc_name: "GENERIC_IMU_RST_COUNTERS_CC"
+    notes: "Reset HK counters"
+  - tc_fc: 4
+    tc_name: "GENERIC_IMU_CONFIG_CC"
+    notes: "Write configuration to IMU device. Requires ENABLED to have effect."
+    fuzz: true

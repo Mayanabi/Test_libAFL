@@ -1,0 +1,33 @@
+app_name: "GENERIC_FSS"
+msgid: "0x1920"
+description: "Generic Fine Sun Sensor (FSS) driver — SPI-based precise sun vector measurement; publishes FSS telemetry when enabled"
+stateless: false
+
+states:
+  - DISABLED
+  - ENABLED
+
+transitions:
+  - from: DISABLED
+    to: ENABLED
+    tc_fc: 2
+    tc_name: "GENERIC_FSS_ENABLE_CC"
+    mandatory: true
+    fuzz: false
+    notes: "Opens SPI port; sets DeviceEnabled=GENERIC_FSS_DEVICE_ENABLED. Fine sun vector telemetry only published when enabled. Required for ADCS sun-safe mode."
+
+  - from: ENABLED
+    to: DISABLED
+    tc_fc: 3
+    tc_name: "GENERIC_FSS_DISABLE_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Closes SPI port; stops FSS data publication."
+
+commands_always_valid:
+  - tc_fc: 0
+    tc_name: "GENERIC_FSS_NOOP_CC"
+    notes: "Standard cFS NOOP"
+  - tc_fc: 1
+    tc_name: "GENERIC_FSS_RST_COUNTERS_CC"
+    notes: "Reset HK counters"

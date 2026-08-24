@@ -1,0 +1,128 @@
+app_name: "EVS"
+msgid: "0x1801"
+description: "cFE Event Services — manages event message routing from all cFS apps to output ports (UART/SysLog/EventLog). Maintains per-app enable/disable state and per-event-type enable/disable state. No command ordering requirement — all commands are independently valid, but the enable/disable state they set affects all subsequent event output."
+stateless: false
+
+# Source: fsw/cfe/modules/evs/fsw/src/cfe_evs_task.c
+# CFE_EVS_EnableAppEventsCmd: sets AppDataPtr->ActiveFlag = true
+# CFE_EVS_DisableAppEventsCmd: sets AppDataPtr->ActiveFlag = false
+# CFE_EVS_EnableEventTypeCmd: EVS_EnableTypes() sets bit in all app TypeFilter masks
+# CFE_EVS_DisableEventTypeCmd: EVS_DisableTypes() clears bit in all app TypeFilter masks
+# CFE_EVS_EnableAppEventTypeCmd: EVS_EnableTypes() per-app
+# CFE_EVS_DisableAppEventTypeCmd: EVS_DisableTypes() per-app
+# Per-app state: AppDataPtr->ActiveFlag (boolean)
+# Per-type state: TypeFilter bitmask (DEBUG=0x1, INFO=0x2, ERROR=0x4, CRIT=0x8)
+# Per-port state: EnablePortList bitmask (port 1..4)
+
+states:
+  - EVENTS_ENABLED
+  - EVENTS_DISABLED
+
+# Note: EVS has three orthogonal state dimensions:
+#   1. Per-app active flag (FC=7/8)
+#   2. Per-type filter bitmask — global (FC=2/3) or per-app (FC=5/6)
+#   3. Per-port output enable bitmask (FC=11/12)
+# No transition is prerequisite for another. States are toggled independently.
+
+transitions:
+  - from: EVENTS_ENABLED
+    to: EVENTS_DISABLED
+    tc_fc: 8
+    tc_name: "CFE_EVS_DISABLE_APP_EVENTS_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Param: AppName(20B string). Silences ALL events from the named app regardless of type. Most dangerous — silences LC, HS, CS, CI events."
+
+  - from: EVENTS_DISABLED
+    to: EVENTS_ENABLED
+    tc_fc: 7
+    tc_name: "CFE_EVS_ENABLE_APP_EVENTS_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Param: AppName(20B string). Re-enables all events from the named app."
+
+  - from: EVENTS_ENABLED
+    to: EVENTS_DISABLED
+    tc_fc: 3
+    tc_name: "CFE_EVS_DISABLE_EVENT_TYPE_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Param: BitMask(uint8). Globally disables event type(s) across ALL apps. Bit 0=DEBUG, 1=INFO, 2=ERROR, 3=CRIT. FUZZ: BitMask=0xFF disables all types system-wide."
+
+  - from: EVENTS_DISABLED
+    to: EVENTS_ENABLED
+    tc_fc: 2
+    tc_name: "CFE_EVS_ENABLE_EVENT_TYPE_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Param: BitMask(uint8). Re-enables event type(s) globally."
+
+commands_always_valid:
+  - tc_fc: 0
+    tc_name: "CFE_EVS_NOOP_CC"
+  - tc_fc: 1
+    tc_name: "CFE_EVS_RESET_COUNTERS_CC"
+  - tc_fc: 4
+    tc_name: "CFE_EVS_SET_EVENT_FORMAT_MODE_CC"
+    fuzz: true
+    notes: "Param: MsgFormat(uint8): 0=SHORT, 1=LONG. SHORT omits event message text."
+  - tc_fc: 5
+    tc_name: "CFE_EVS_ENABLE_APP_EVENT_TYPE_CC"
+    fuzz: true
+    notes: "Params: AppName(20B), BitMask(uint8). Enable specific event types for one app."
+  - tc_fc: 6
+    tc_name: "CFE_EVS_DISABLE_APP_EVENT_TYPE_CC"
+    fuzz: true
+    notes: "Params: AppName(20B), BitMask(uint8). Disable specific event types for one app. FUZZ: AppName='LC', BitMask=0xFF — silence all LC limit-check events."
+  - tc_fc: 9
+    tc_name: "CFE_EVS_RESET_APP_COUNTER_CC"
+    notes: "Param: AppName(20B). Reset event counter for the named app."
+  - tc_fc: 10
+    tc_name: "CFE_EVS_SET_FILTER_CC"
+    fuzz: true
+    notes: "Params: AppName(20B), EventID(uint16), Mask(uint16). Binary filter: pass every (N mod Mask+1)=0. Mask=0=always pass, Mask=0xFFFF=never pass. FUZZ: Mask=0xFFFF suppresses a specific event permanently."
+  - tc_fc: 11
+    tc_name: "CFE_EVS_ENABLE_PORTS_CC"
+    fuzz: true
+    notes: "Param: BitMask(uint8). Enable output ports. Bit 0=port1(UART), 1=port2, 2=port3, 3=port4."
+  - tc_fc: 12
+    tc_name: "CFE_EVS_DISABLE_PORTS_CC"
+    fuzz: true
+    notes: "Param: BitMask(uint8). Disable output ports. BitMask=0xFF — no events reach any output."
+  - tc_fc: 13
+    tc_name: "CFE_EVS_RESET_FILTER_CC"
+    notes: "Params: AppName(20B), EventID(uint16). Reset binary filter mask for one event."
+  - tc_fc: 14
+    tc_name: "CFE_EVS_RESET_ALL_FILTERS_CC"
+    notes: "Param: AppName(20B). Reset all binary filters for the named app."
+  - tc_fc: 15
+    tc_name: "CFE_EVS_ADD_EVENT_FILTER_CC"
+    fuzz: true
+    notes: "Params: AppName(20B), EventID(uint16), Mask(uint16). Add binary filter for event. FUZZ: add filter for same EventID twice (second should be rejected)."
+  - tc_fc: 16
+    tc_name: "CFE_EVS_DELETE_EVENT_FILTER_CC"
+    notes: "Params: AppName(20B), EventID(uint16). Remove binary filter."
+  - tc_fc: 17
+    tc_name: "CFE_EVS_WRITE_APP_DATA_FILE_CC"
+    fuzz: true
+    notes: "Param: AppDataFilename(64B). Write per-app event state to file. FUZZ: path traversal."
+  - tc_fc: 18
+    tc_name: "CFE_EVS_WRITE_LOG_DATA_FILE_CC"
+    fuzz: true
+    notes: "Param: LogFilename(64B). Write event log to file. FUZZ: path traversal."
+  - tc_fc: 19
+    tc_name: "CFE_EVS_SET_LOG_MODE_CC"
+    notes: "Param: LogMode(uint8): 0=OVERWRITE, 1=DISCARD. Overwrite mode loses oldest events."
+  - tc_fc: 20
+    tc_name: "CFE_EVS_CLEAR_LOG_CC"
+    notes: "No params. Wipes the onboard event log."
+
+fuzz_notes:
+  critical:
+    - "FC=8 (DISABLE_APP_EVENTS, AppName='LC'): LC limit violations become invisible"
+    - "FC=8 (DISABLE_APP_EVENTS, AppName='HS'): HS watchdog alerts suppressed"
+    - "FC=3 (DISABLE_EVENT_TYPE, BitMask=0xFF): Silence all event types system-wide"
+    - "FC=12 (DISABLE_PORTS, BitMask=0xFF): No events reach any output — ground blind to faults"
+    - "FC=10 (SET_FILTER, Mask=0xFFFF): Suppress a specific critical event permanently"
+  safe_to_fuzz:
+    - "FC=0,1,9,13,14,16,20"

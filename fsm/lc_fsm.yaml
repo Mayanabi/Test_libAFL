@@ -1,0 +1,74 @@
+app_name: "LC"
+msgid: "0x18A4"
+description: "Limit Checker — table-driven telemetry monitoring and autonomous response (actionpoints trigger RTS sequences when watchpoints breach limits)"
+stateless: false
+
+states:
+  - DISABLED
+  - PASSIVE
+  - ACTIVE
+
+transitions:
+  - from: DISABLED
+    to: ACTIVE
+    tc_fc: 2
+    tc_name: "LC_SET_LC_STATE_CC"
+    mandatory: true
+    fuzz: false
+    notes: "Transitions LC from DISABLED to ACTIVE (NewLCState=1). Must be done before actionpoints sample (LC_SAMPLE_AP_MID) has any effect. Default power-on state is DISABLED."
+
+  - from: DISABLED
+    to: PASSIVE
+    tc_fc: 2
+    tc_name: "LC_SET_LC_STATE_CC"
+    mandatory: false
+    fuzz: false
+    notes: "Transitions to PASSIVE (NewLCState=2) — watchpoints evaluated but no RTS executed."
+
+  - from: ACTIVE
+    to: PASSIVE
+    tc_fc: 2
+    tc_name: "LC_SET_LC_STATE_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Transitions to PASSIVE state — RTS execution disabled."
+
+  - from: PASSIVE
+    to: ACTIVE
+    tc_fc: 2
+    tc_name: "LC_SET_LC_STATE_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Transitions to ACTIVE state — RTS execution re-enabled."
+
+  - from: ACTIVE
+    to: DISABLED
+    tc_fc: 2
+    tc_name: "LC_SET_LC_STATE_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Disables all LC monitoring and RTS execution."
+
+commands_always_valid:
+  - tc_fc: 0
+    tc_name: "LC_NOOP_CC"
+    notes: "Standard cFS NOOP"
+  - tc_fc: 1
+    tc_name: "LC_RESET_COUNTERS_CC"
+    notes: "Reset HK counters, valid in any state"
+  - tc_fc: 3
+    tc_name: "LC_SET_AP_STATE_CC"
+    notes: "Sets state of individual actionpoint (ACTIVE/PASSIVE/DISABLED/PERMOFF). Takes APNumber and NewAPState parameters."
+    fuzz: true
+  - tc_fc: 4
+    tc_name: "LC_SET_AP_PERMOFF_CC"
+    notes: "Permanently disables an actionpoint. Sensitive — requires SET_AP_STATE first."
+    fuzz: true
+  - tc_fc: 5
+    tc_name: "LC_RESET_AP_STATS_CC"
+    notes: "Resets actionpoint statistics"
+    fuzz: true
+  - tc_fc: 6
+    tc_name: "LC_RESET_WP_STATS_CC"
+    notes: "Resets watchpoint statistics"
+    fuzz: true

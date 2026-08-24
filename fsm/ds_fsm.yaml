@@ -1,0 +1,97 @@
+app_name: "DS"
+msgid: "0x18BB"
+description: "Data Storage — routes and stores telemetry messages to files based on configurable filter table; app-level and per-destination enable/disable"
+stateless: false
+
+states:
+  - APP_DISABLED
+  - APP_ENABLED
+
+transitions:
+  - from: APP_DISABLED
+    to: APP_ENABLED
+    tc_fc: 2
+    tc_name: "DS_SET_APP_STATE_CC"
+    mandatory: true
+    fuzz: false
+    notes: "Sets DS_AppData.AppEnableState=DS_ENABLED. Without this, DS drops all incoming telemetry packets and writes nothing to files. Takes EnableState=1(enabled)."
+
+  - from: APP_ENABLED
+    to: APP_DISABLED
+    tc_fc: 2
+    tc_name: "DS_SET_APP_STATE_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Disables DS — no data written to storage. Takes EnableState=0(disabled)."
+
+commands_always_valid:
+  - tc_fc: 0
+    tc_name: "DS_NOOP_CC"
+    notes: "Standard cFS NOOP"
+  - tc_fc: 1
+    tc_name: "DS_RESET_COUNTERS_CC"
+    notes: "Reset HK counters"
+  - tc_fc: 3
+    tc_name: "DS_SET_FILTER_FILE_CC"
+    notes: "Sets filter table entry's destination file index. Takes MessageID, FilterParmsIndex, FileTableIndex."
+    fuzz: true
+  - tc_fc: 4
+    tc_name: "DS_SET_FILTER_TYPE_CC"
+    notes: "Sets filter type (count or time). Takes MessageID, FilterParmsIndex, FilterType."
+    fuzz: true
+  - tc_fc: 5
+    tc_name: "DS_SET_FILTER_PARMS_CC"
+    notes: "Sets filter parameters (N, X, O values). Controls which packets are stored."
+    fuzz: true
+  - tc_fc: 6
+    tc_name: "DS_SET_DEST_TYPE_CC"
+    notes: "Sets destination file naming type (count or time-based)."
+    fuzz: true
+  - tc_fc: 7
+    tc_name: "DS_SET_DEST_STATE_CC"
+    notes: "Enables/disables a specific destination file entry. Takes FileTableIndex, EnableState."
+    fuzz: true
+  - tc_fc: 8
+    tc_name: "DS_SET_DEST_PATH_CC"
+    notes: "Sets destination file path. Takes FileTableIndex, Pathname."
+    fuzz: true
+  - tc_fc: 9
+    tc_name: "DS_SET_DEST_BASE_CC"
+    notes: "Sets destination file base name."
+    fuzz: true
+  - tc_fc: 10
+    tc_name: "DS_SET_DEST_EXT_CC"
+    notes: "Sets destination file extension."
+    fuzz: true
+  - tc_fc: 11
+    tc_name: "DS_SET_DEST_SIZE_CC"
+    notes: "Sets maximum file size limit."
+    fuzz: true
+  - tc_fc: 12
+    tc_name: "DS_SET_DEST_AGE_CC"
+    notes: "Sets maximum file age limit (seconds)."
+    fuzz: true
+  - tc_fc: 13
+    tc_name: "DS_SET_DEST_COUNT_CC"
+    notes: "Sets file sequence counter rollover limit."
+    fuzz: true
+  - tc_fc: 14
+    tc_name: "DS_CLOSE_FILE_CC"
+    notes: "Force-closes a destination file immediately."
+    fuzz: true
+  - tc_fc: 15
+    tc_name: "DS_GET_FILE_INFO_CC"
+    notes: "Sends file info diagnostic telemetry."
+    fuzz: true
+  - tc_fc: 16
+    tc_name: "DS_ADD_MID_CC"
+    notes: "Adds a MID to the filter table."
+    fuzz: true
+  - tc_fc: 17
+    tc_name: "DS_CLOSE_ALL_CC"
+    notes: "Force-closes all open destination files."
+    fuzz: true
+  - tc_fc: 18
+    tc_name: "DS_REMOVE_MID_CC"
+    notes: "Removes a MID from the filter table."
+    fuzz: true

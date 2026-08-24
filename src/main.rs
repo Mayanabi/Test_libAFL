@@ -255,10 +255,16 @@ pub fn main() {
     // --component (voir plus haut) prend le pas sur `mode` : la séquence du
     // catalogue d'état sert de seed directement, la génération procédurale
     // depuis catalogue_dump.json n'a pas lieu d'être dans ce cas.
+    //
+    // generate_initial_inputs(..., 1) : une seule seed initiale, mutée ensuite
+    // à l'infini par la boucle principale — plusieurs seeds n'apportaient pas
+    // de diversité utile ici (identiques pour --component, et de toute façon
+    // remplacées par le corpus qui grossit au fil du fuzzing pour les autres
+    // modes).
     if let Some(seed) = component_seed {
         let mut gen = generator::FixedSeedGenerator::new(seed);
         state
-            .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, cfg.seed_count)
+            .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, 1)
             .expect("Failed to generate initial corpus");
     } else {
         // ── Catalogue ─────────────────────────────────────────────────────────
@@ -268,8 +274,8 @@ pub fn main() {
         if cat.is_empty() {
             panic!(
                 "Le catalogue filtré est vide — vérifie fuzz_config.toml\n\
-                 (apps={:?}, fuzz_priority={:?})",
-                cfg.apps, cfg.fuzz_priority
+                 (apps={:?})",
+                cfg.apps
             );
         }
 
@@ -278,33 +284,33 @@ pub fn main() {
                 let fsm = shared_fsm.expect("FSM should be loaded for stateful mode");
                 let mut gen = StatefulGenerator::new(cat, fsm);
                 state
-                    .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, cfg.seed_count)
+                    .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, 1)
                     .expect("Failed to generate initial corpus");
             }
             config::FuzzMode::Naive => {
                 let mut gen = CatalogueGenerator::new(cat)
                     .with_naive_batch(cfg.naive_batch_size);
                 state
-                    .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, cfg.seed_count)
+                    .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, 1)
                     .expect("Failed to generate initial corpus");
             }
             config::FuzzMode::CrossApp => {
                 let mut gen = CatalogueGenerator::new(cat)
                     .with_cross_app(cfg.cross_app_min_tc, cfg.cross_app_max_tc);
                 state
-                    .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, cfg.seed_count)
+                    .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, 1)
                     .expect("Failed to generate initial corpus");
             }
             config::FuzzMode::All => {
                 let mut gen = CatalogueGenerator::new(cat).with_all_ordered();
                 state
-                    .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, cfg.seed_count)
+                    .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, 1)
                     .expect("Failed to generate initial corpus");
             }
             _ => {
                 let mut gen = CatalogueGenerator::new(cat);
                 state
-                    .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, cfg.seed_count)
+                    .generate_initial_inputs(&mut fuzzer, &mut executor, &mut gen, &mut mgr, 1)
                     .expect("Failed to generate initial corpus");
             }
         }

@@ -1,0 +1,130 @@
+app_name: "CF"
+msgid: "0x18B3"
+description: "CCSDS File Delivery Protocol (CFDP) engine — manages file uplink/downlink transactions using Class 1 or Class 2 CFDP"
+stateless: false
+
+# FC=22 in CMD.txt = CF_WRITE_ACTIVE_TRANS (not ENABLE_ENGINE as originally identified).
+# CF v1 (CMD.txt) has no engine enable/disable gate — engine runs continuously.
+# FC numbers below are from CMD.txt (ground truth for what the GS can send).
+
+states:
+  - CHANNEL_ACTIVE
+  - CHANNEL_FROZEN
+  - CHANNEL_DEQUEUE_DISABLED
+  - TRANSACTION_SUSPENDED
+
+transitions:
+  - from: CHANNEL_ACTIVE
+    to: CHANNEL_FROZEN
+    tc_fc: 4
+    tc_name: "CF_FREEZE_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Freeze all active CFDP transactions. No extra params."
+
+  - from: CHANNEL_FROZEN
+    to: CHANNEL_ACTIVE
+    tc_fc: 5
+    tc_name: "CF_THAW_CC"
+    mandatory: false
+    fuzz: true
+
+  - from: CHANNEL_ACTIVE
+    to: TRANSACTION_SUSPENDED
+    tc_fc: 6
+    tc_name: "CF_SUSPEND_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Param: TRANSACTION (16-byte string — e.g. '0.24_5' or filepath). Fuzz: empty, overlong, null bytes, path traversal."
+
+  - from: TRANSACTION_SUSPENDED
+    to: CHANNEL_ACTIVE
+    tc_fc: 7
+    tc_name: "CF_RESUME_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Param: TRANSACTION string"
+
+  - from: CHANNEL_ACTIVE
+    to: CHANNEL_DEQUEUE_DISABLED
+    tc_fc: 17
+    tc_name: "CF_DISABLE_DEQUEUE_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Param: CHAN (uint8, 0-2). Stops dequeue from outgoing queue."
+
+  - from: CHANNEL_DEQUEUE_DISABLED
+    to: CHANNEL_ACTIVE
+    tc_fc: 16
+    tc_name: "CF_ENABLE_DEQUEUE_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Param: CHAN (uint8, 0-2)"
+
+commands_always_valid:
+  - tc_fc: 0
+    tc_name: "CF_NOOP_CC"
+    notes: "Standard cFS NOOP"
+  - tc_fc: 1
+    tc_name: "CF_RESET_COUNTERS_CC"
+    notes: "Param: VALUE (uint8, 0-4: ALL/CMD/FAULT/UP/DOWN) + 3 spare bytes"
+    fuzz: true
+  - tc_fc: 2
+    tc_name: "CF_TX_FILE_CC"
+    notes: "Single file downlink. Params: CLASS, KEEP, CHAN_NUM, PRIORITY, DEST_ID(4B), SRCFILENAME(64B), DSTFILENAME(64B). Fuzz: path traversal, overlong strings, CLASS=255."
+    fuzz: true
+  - tc_fc: 3
+    tc_name: "CF_PLAYBACK_DIR_CC"
+    notes: "Directory downlink. Params: CLASS, CHAN, PRIORITY, PRESERVE, PEER_ENTITY_ID(16B), SRCPATH(64B), DSTPATH(64B)."
+    fuzz: true
+  - tc_fc: 8
+    tc_name: "CF_CANCEL_CC"
+    notes: "Param: TRANSACTION string (16 bytes). Cancel in-progress transaction."
+    fuzz: true
+  - tc_fc: 9
+    tc_name: "CF_ABANDON_CC"
+    notes: "Param: TRANSACTION string. Abandon without closure."
+    fuzz: true
+  - tc_fc: 10
+    tc_name: "CF_SET_MIB_PARAMETER_CC"
+    notes: "Params: PARAM (32B string), VALUE (32B string). Fuzz: unknown MIB param names, very long values."
+    fuzz: true
+  - tc_fc: 11
+    tc_name: "CF_GET_MIB_PARAMETER_CC"
+    notes: "Param: PARAM (32B string)."
+    fuzz: true
+  - tc_fc: 15
+    tc_name: "CF_WRITE_QUEUE_INFO_CC"
+    notes: "Params: TYPE(UP/DOWN), CHAN(0-1), QUEUE(Active/History), spare. Write queue to file."
+    fuzz: true
+  - tc_fc: 18
+    tc_name: "CF_ENABLE_DIRECTORY_POLLING_CC"
+    notes: "Params: CHAN(0-1), DIRECTORY(0-2), spare."
+    fuzz: true
+  - tc_fc: 19
+    tc_name: "CF_DISABLE_DIRECTORY_POLLING_CC"
+    fuzz: true
+  - tc_fc: 20
+    tc_name: "CF_DELETE_QUEUE_NODE_CC"
+    notes: "Param: TRANSACTION_NODE (32B string). Fuzz: invalid node IDs."
+    fuzz: true
+  - tc_fc: 21
+    tc_name: "CF_PURGE_QUEUE_CC"
+    notes: "Params: TYPE(UP/DOWN), CHAN, QUEUE(Active/History), spare."
+    fuzz: true
+  - tc_fc: 22
+    tc_name: "CF_WRITE_ACTIVE_TRANS_CC"
+    notes: "Params: TYPE(All/Up/Down, uint8), spare, FILENAME(32B string). NOT ENABLE_ENGINE."
+    fuzz: true
+  - tc_fc: 23
+    tc_name: "CF_KICKSTART_CC"
+    notes: "Param: CHAN(0-1) + 3 spare bytes. Restarts a stalled channel."
+    fuzz: true
+  - tc_fc: 25
+    tc_name: "CF_GIVE_TAKE_CC"
+    notes: "Params: CHAN(0-1), GIVE_OR_TAKE(uint8, 0-255). Manipulates channel semaphore. Fuzz GIVE_OR_TAKE."
+    fuzz: true
+  - tc_fc: 26
+    tc_name: "CF_ENADIS_AUTO_SUSPEND_CC"
+    notes: "Param: DIS_EN(0=Disable, 1=Enable) + 3 spare. Enable/disable auto-suspend on NAK limit."
+    fuzz: true

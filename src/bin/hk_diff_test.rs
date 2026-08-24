@@ -98,15 +98,75 @@ fn hk_lines_since(start: usize) -> Vec<String> {
         .collect()
 }
 
-/// MsgId HK attendu pour chaque commande de la séquence : même mot ID que la
-/// commande, bit "Type" CCSDS (TC=1/TM=0, bit 12) mis à 0 — vérifié
-/// empiriquement (NOVATEL_OEM615 : commande ID=0x1870 → HK MsgId=0x0870).
+/// Table (MsgId commande → MsgId HK) extraite des headers *_msgids.h du
+/// dépôt NOS3 (source de vérité, pas une heuristique) — un par app présente
+/// dans catalogue_dump.json. Voir par ex.
+/// components/novatel_oem615/fsw/cfs/platform_inc/novatel_oem615_msgids.h
+/// (NOVATEL_OEM615_CMD_MID / NOVATEL_OEM615_HK_TLM_MID) et l'équivalent pour
+/// chaque autre app dans fsw/apps/*/fsw/*inc/ et components/*/fsw/cfs/platform_inc/.
+///
+/// Attention : ce n'est PAS un simple "bit 12 à 0" — 8 apps sur 30 ont un HK
+/// MsgId qui ne dérive pas directement du MsgId de commande (ex: CF
+/// 0x18B3→0x08B0, DS 0x18BB→0x08B8, SC 0x18A9→0x08AA, SCH 0x1895→0x0897,
+/// LC 0x18A4→0x08A7, ES 0x1806→0x0800, FM 0x188C→0x088A, SBN 0x18DA→0x08DC).
+const CMD_TO_HK_MID: &[(u16, u16)] = &[
+    (0x18C8, 0x08C8), // ARDUCAM (CAM)
+    (0x18B3, 0x08B0), // CF
+    (0x1884, 0x0884), // CI
+    (0x18BB, 0x08B8), // DS
+    (0x1806, 0x0800), // ES
+    (0x1801, 0x0801), // EVS
+    (0x188C, 0x088A), // FM
+    (0x1940, 0x0940), // GENERIC_ADCS
+    (0x1910, 0x0910), // GENERIC_CSS
+    (0x191A, 0x091A), // GENERIC_EPS
+    (0x1920, 0x0920), // GENERIC_FSS
+    (0x1925, 0x0925), // GENERIC_IMU
+    (0x192A, 0x092A), // GENERIC_MAG
+    (0x1930, 0x0930), // GENERIC_RADIO
+    (0x1992, 0x0993), // GENERIC_REACTION_WHEEL
+    (0x1935, 0x0935), // GENERIC_STAR_TRACKER
+    (0x18EA, 0x08EA), // GENERIC_THRUSTER
+    (0x193A, 0x093A), // GENERIC_TORQUER
+    (0x18A4, 0x08A7), // LC
+    (0x18F8, 0x08F8), // MGR
+    (0x1870, 0x0870), // NOVATEL_OEM615
+    (0x18FA, 0x08FA), // SAMPLE
+    (0x1803, 0x0803), // SB
+    (0x18DA, 0x08DC), // SBN
+    (0x18A9, 0x08AA), // SC
+    (0x1895, 0x0897), // SCH
+    (0x18FC, 0x08FC), // SYN
+    (0x1804, 0x0804), // TBL
+    (0x1805, 0x0805), // TIME
+    (0x1880, 0x0880), // TO
+    (0x18E8, 0x08E8), // TO_LAB
+];
+
+/// Résout le MsgId HK pour un MsgId de commande. Retombe sur l'ancienne
+/// heuristique (bit 12 à 0) avec un avertissement si le MsgId n'est pas dans
+/// la table — n'arrive que pour un nouvel app ajouté à NOS3 après coup et pas
+/// encore répertorié ci-dessus.
+fn hk_mid_for_cmd(cmd_mid: u16) -> u16 {
+    match CMD_TO_HK_MID.iter().find(|(cmd, _)| *cmd == cmd_mid) {
+        Some((_, hk)) => *hk,
+        None => {
+            eprintln!(
+                "[hk_diff_test] ⚠ MsgId 0x{cmd_mid:04X} absent de CMD_TO_HK_MID \
+                 (app non répertoriée) — repli sur l'heuristique bit12=0, à vérifier"
+            );
+            cmd_mid & !0x1000u16
+        }
+    }
+}
+
+/// MsgId HK attendu pour chaque commande de la séquence, via CMD_TO_HK_MID.
 fn expected_hk_msgids(seq: &CcsdsSequenceInput) -> Vec<String> {
     seq.commands
         .iter()
         .filter_map(|cmd| cmd.args.iter().find(|a| a.name.eq_ignore_ascii_case("ID")))
         .filter_map(|id_arg| input::parse_uint(&id_arg.value))
-        .map(|id| format!("{:04x}", (id as u16) & !0x1000u16))
+        .map(|id| format!("{:04x}", hk_mid_for_cmd(id as u16)))
         .collect::<HashSet<_>>()
         .into_iter()
         .collect()

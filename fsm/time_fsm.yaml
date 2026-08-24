@@ -1,0 +1,111 @@
+app_name: "TIME"
+msgid: "0x1805"
+description: "cFE Time Services — maintains the spacecraft clock (MET + STCF = TAI, TAI - LeapSeconds = UTC). ClockState transitions between INVALID/VALID/FLYWHEEL. No command requires prior state — all are independently valid, but SET_STATE can directly jam any state value. SET_TIME, SET_MET, SET_STCF reset the clock reference. ADD/SUB_1HZ_ADJUSTMENT apply continuous drift."
+stateless: false
+
+# Source: fsw/cfe/modules/time/fsw/src/cfe_time_task.c
+# CFE_TIME_SetStateCmd() line 523: accepts INVALID/VALID/FLYWHEEL directly — no guards
+# CFE_TIME_SetState() in cfe_time_utils.c line 757: FLYWHEEL mode sets ForceState=true
+# Normal progression: hardware tone ISR → VALID; loss of tone → automatic FLYWHEEL
+# Ground can jam state directly with FC=4
+
+states:
+  - CLOCK_INVALID
+  - CLOCK_VALID
+  - CLOCK_FLYWHEEL
+
+transitions:
+  - from: CLOCK_INVALID
+    to: CLOCK_VALID
+    tc_fc: 4
+    tc_name: "CFE_TIME_SET_STATE_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Param: ClockState(int16): 0=INVALID, 1=VALID, 2=FLYWHEEL. Direct state jam — no prerequisite. FUZZ: value=2 (force FLYWHEEL), value=-1 or 0xFFFF (invalid state → error + no change)."
+
+  - from: CLOCK_VALID
+    to: CLOCK_FLYWHEEL
+    tc_fc: 4
+    tc_name: "CFE_TIME_SET_STATE_CC"
+    mandatory: false
+    fuzz: true
+    notes: "SET_STATE=FLYWHEEL: ForceState=true — TIME ignores future external tones and runs free. SC ATS sequences are timestamped relative to this clock."
+
+  - from: CLOCK_FLYWHEEL
+    to: CLOCK_VALID
+    tc_fc: 4
+    tc_name: "CFE_TIME_SET_STATE_CC"
+    mandatory: false
+    fuzz: true
+    notes: "SET_STATE=VALID resets ForceState — clock resumes sync with tones."
+
+  - from: CLOCK_INVALID
+    to: CLOCK_VALID
+    tc_fc: 7
+    tc_name: "CFE_TIME_SET_TIME_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Params: Seconds(uint32), MicroSeconds(uint32). Sets TAI directly: MET+STCF = provided time. Also implicitly sets state to VALID in practice."
+
+commands_always_valid:
+  - tc_fc: 0
+    tc_name: "CFE_TIME_NOOP_CC"
+  - tc_fc: 1
+    tc_name: "CFE_TIME_RESET_COUNTERS_CC"
+  - tc_fc: 2
+    tc_name: "CFE_TIME_SEND_DIAGNOSTIC_TLM_CC"
+    notes: "Sends CFE_TIME_DiagPacket — contains full clock state dump."
+  - tc_fc: 3
+    tc_name: "CFE_TIME_SET_SOURCE_CC"
+    fuzz: true
+    notes: "Param: TimeSource(int16): 1=INTERNAL, 2=EXTERNAL. FUZZ: value=0 or 3 — invalid source → error."
+  - tc_fc: 5
+    tc_name: "CFE_TIME_ADD_DELAY_CC"
+    fuzz: true
+    notes: "Params: Seconds(uint32), MicroSeconds(uint32). Add tone delay (latency compensation). FUZZ: large values — overflow STCF, cascade into SC ATS timing."
+  - tc_fc: 6
+    tc_name: "CFE_TIME_SUB_DELAY_CC"
+    fuzz: true
+    notes: "Params: Seconds(uint32), MicroSeconds(uint32). Subtract tone delay."
+  - tc_fc: 8
+    tc_name: "CFE_TIME_SET_MET_CC"
+    fuzz: true
+    notes: "Params: Seconds(uint32), MicroSeconds(uint32). Set Mission Elapsed Time only — does not change STCF. FUZZ: MET=0 (reset elapsed time), MET=0xFFFFFFFF (rollover test)."
+  - tc_fc: 9
+    tc_name: "CFE_TIME_SET_STCF_CC"
+    fuzz: true
+    notes: "Params: Seconds(uint32), MicroSeconds(uint32). Set Spacecraft Time Correlation Factor. FUZZ: STCF=0 — TAI=MET, loses leap second info."
+  - tc_fc: 10
+    tc_name: "CFE_TIME_SET_LEAP_SECONDS_CC"
+    fuzz: true
+    notes: "Param: LeapSeconds(int16). Set leap seconds for UTC conversion. FUZZ: large positive/negative, 0 — all shift UTC offset."
+  - tc_fc: 11
+    tc_name: "CFE_TIME_ADD_ADJUST_CC"
+    fuzz: true
+    notes: "Params: Seconds(uint32), MicroSeconds(uint32). One-time STCF adjustment (add). Applied once and done."
+  - tc_fc: 12
+    tc_name: "CFE_TIME_SUB_ADJUST_CC"
+    fuzz: true
+    notes: "One-time STCF adjustment (subtract)."
+  - tc_fc: 13
+    tc_name: "CFE_TIME_ADD_1HZ_ADJUSTMENT_CC"
+    fuzz: true
+    notes: "Params: Seconds(uint32), MicroSeconds(uint32). Persistent 1Hz STCF drift — applied every second. FUZZ: large value — continuous rapid clock drift injected once per second."
+  - tc_fc: 14
+    tc_name: "CFE_TIME_SUB_1HZ_ADJUSTMENT_CC"
+    fuzz: true
+    notes: "Persistent 1Hz STCF drift subtracted each second."
+  - tc_fc: 15
+    tc_name: "CFE_TIME_SET_SIGNAL_CC"
+    fuzz: true
+    notes: "Param: ToneSource(int16): 1=PRIMARY, 2=REDUNDANT. FUZZ: value=0 or 3 — invalid signal → error."
+
+fuzz_notes:
+  critical:
+    - "FC=7 (SET_TIME): Jam spacecraft clock — all SC ATS absolute timestamps become wrong, breaks command sequence timing"
+    - "FC=13/14 (ADD/SUB_1HZ_ADJUSTMENT, large value): Continuous clock drift injected every second — slow corruption of SC scheduling"
+    - "FC=4 (SET_STATE=FLYWHEEL): Force clock into flywheel — SC ATS starts drifting from ground time immediately"
+    - "FC=8 (SET_MET=0): Reset elapsed time — ground time correlation breaks"
+  safe_to_fuzz:
+    - "FC=0,1,2"
+  note: "SC (Stored Commands) sequences use TIME for their absolute timestamp trigger. A time jam directly affects SC ATS execution."

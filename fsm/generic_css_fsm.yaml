@@ -1,0 +1,33 @@
+app_name: "GENERIC_CSS"
+msgid: "0x1910"
+description: "Generic Coarse Sun Sensor (CSS) driver — SPI-based 6-sensor sun vector measurement; publishes sun vector telemetry when enabled"
+stateless: false
+
+states:
+  - DISABLED
+  - ENABLED
+
+transitions:
+  - from: DISABLED
+    to: ENABLED
+    tc_fc: 2
+    tc_name: "GENERIC_CSS_ENABLE_CC"
+    mandatory: true
+    fuzz: false
+    notes: "Opens SPI port; sets DeviceEnabled=GENERIC_CSS_DEVICE_ENABLED. Sun vector telemetry only published when enabled. Required for ADCS sun-safe mode."
+
+  - from: ENABLED
+    to: DISABLED
+    tc_fc: 3
+    tc_name: "GENERIC_CSS_DISABLE_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Closes SPI port; stops CSS data publication."
+
+commands_always_valid:
+  - tc_fc: 0
+    tc_name: "GENERIC_CSS_NOOP_CC"
+    notes: "Standard cFS NOOP"
+  - tc_fc: 1
+    tc_name: "GENERIC_CSS_RST_COUNTERS_CC"
+    notes: "Reset HK counters"

@@ -1,0 +1,37 @@
+app_name: "GENERIC_THRUSTER"
+msgid: "0x18EA"
+description: "Generic Thruster driver — UART-based multi-thruster control; must be enabled before PERCENTAGE commands have effect; controls up to 4 thrusters"
+stateless: false
+
+states:
+  - DISABLED
+  - ENABLED
+
+transitions:
+  - from: DISABLED
+    to: ENABLED
+    tc_fc: 2
+    tc_name: "GENERIC_THRUSTER_ENABLE_CC"
+    mandatory: true
+    fuzz: false
+    notes: "Opens UART port; sets DeviceEnabled=GENERIC_THRUSTER_DEVICE_ENABLED. PERCENTAGE_CC commands (fire thrusters) only execute when enabled."
+
+  - from: ENABLED
+    to: DISABLED
+    tc_fc: 3
+    tc_name: "GENERIC_THRUSTER_DISABLE_CC"
+    mandatory: false
+    fuzz: false
+    notes: "Closes device interface. SAFE: set all thrusters to 0% BEFORE disabling."
+
+commands_always_valid:
+  - tc_fc: 0
+    tc_name: "GENERIC_THRUSTER_NOOP_CC"
+    notes: "Standard cFS NOOP"
+  - tc_fc: 1
+    tc_name: "GENERIC_THRUSTER_RST_COUNTERS_CC"
+    notes: "Reset HK counters"
+  - tc_fc: 4
+    tc_name: "GENERIC_THRUSTER_PERCENTAGE_CC"
+    notes: "Set thruster on-time percentage (0-100) for a specific thruster. Requires ENABLED. Takes ThrusterNumber and Percentage parameters. SENSITIVE: directly fires thrusters."
+    fuzz: true

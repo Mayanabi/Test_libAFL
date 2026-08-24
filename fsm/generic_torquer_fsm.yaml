@@ -1,0 +1,41 @@
+app_name: "GENERIC_TORQUER"
+msgid: "0x193A"
+description: "Generic Magnetic Torquer (MTB) driver — I2C-based 3-axis magnetorquer; enables/disables coils and sends percent-on commands for attitude detumbling"
+stateless: false
+
+states:
+  - DISABLED
+  - ENABLED
+
+transitions:
+  - from: DISABLED
+    to: ENABLED
+    tc_fc: 2
+    tc_name: "GENERIC_TORQUER_ENABLE_CC"
+    mandatory: true
+    fuzz: false
+    notes: "Opens I2C port; sets DeviceEnabled=GENERIC_TORQUER_DEVICE_ENABLED. CONFIG_CC and CONFIG_ALL_CC commands only execute when enabled."
+
+  - from: ENABLED
+    to: DISABLED
+    tc_fc: 3
+    tc_name: "GENERIC_TORQUER_DISABLE_CC"
+    mandatory: false
+    fuzz: true
+    notes: "Closes I2C port; stops torquer actuation."
+
+commands_always_valid:
+  - tc_fc: 0
+    tc_name: "GENERIC_TORQUER_NOOP_CC"
+    notes: "Standard cFS NOOP"
+  - tc_fc: 1
+    tc_name: "GENERIC_TORQUER_RST_COUNTERS_CC"
+    notes: "Reset HK counters"
+  - tc_fc: 4
+    tc_name: "GENERIC_TORQUER_CONFIG_CC"
+    notes: "Configure a single torquer axis percent-on. Requires ENABLED. Takes TorquerNumber and PercentOn."
+    fuzz: true
+  - tc_fc: 5
+    tc_name: "GENERIC_TORQUER_CONFIG_ALL_CC"
+    notes: "Configure all three torquer axes simultaneously. Used by ADCS app for attitude control. Requires ENABLED."
+    fuzz: true

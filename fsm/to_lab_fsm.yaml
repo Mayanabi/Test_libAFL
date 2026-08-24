@@ -1,0 +1,41 @@
+app_name: "TO_LAB"
+msgid: "0x18E8"
+description: "Telemetry Output Lab — simple UDP-socket-based telemetry downlink for ground lab use; must be enabled with destination IP before data flows"
+stateless: false
+
+states:
+  - DOWNLINK_OFF
+  - DOWNLINK_ON
+
+transitions:
+  - from: DOWNLINK_OFF
+    to: DOWNLINK_ON
+    tc_fc: 2
+    tc_name: "TO_LAB_OUTPUT_ENABLE_CC"
+    mandatory: true
+    fuzz: false
+    notes: "Sets downlink_on=true and opens UDP socket to dest_IP:cfgTLM_PORT. Must be sent to receive any telemetry on the ground. Takes destination IP string."
+
+commands_always_valid:
+  - tc_fc: 0
+    tc_name: "TO_LAB_NOOP_CC"
+    notes: "Standard cFS NOOP"
+  - tc_fc: 1
+    tc_name: "TO_LAB_RESET_STATUS_CC"
+    notes: "Reset command/error counters"
+  - tc_fc: 3
+    tc_name: "TO_LAB_SEND_DATA_TYPES_CC"
+    notes: "Sends a data types demo telemetry packet"
+    fuzz: true
+  - tc_fc: 4
+    tc_name: "TO_LAB_REMOVE_PKT_CC"
+    notes: "Removes a MID subscription from the telemetry pipe. Takes Stream MID."
+    fuzz: true
+  - tc_fc: 5
+    tc_name: "TO_LAB_REMOVE_ALL_PKT_CC"
+    notes: "Removes ALL MID subscriptions — blackout of all telemetry."
+    fuzz: true
+  - tc_fc: 6
+    tc_name: "TO_LAB_ADD_PKT_CC"
+    notes: "Adds a MID subscription to the telemetry pipe. Takes Stream, Flags, BufLimit."
+    fuzz: true
