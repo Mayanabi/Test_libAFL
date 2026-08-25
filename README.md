@@ -282,23 +282,6 @@ cible l'un de ces noms est ignoré avec un avertissement) :
 name  = "NOM_DU_PARAM"   # nom de l'arg tel qu'il apparaît dans catalogue_dump.json
 value = "valeur"          # envoyée telle quelle (ex: "0xFF", "1234", "toto")
 ```
-
-### `delay_min_ms` / `delay_max_ms` (optionnels, top-level)
-
-```toml
-delay_min_ms = 0
-delay_max_ms = 200
-```
-
-Contrôlent le délai avant l'envoi du paquet, comme le mutateur `delay` en
-fuzzing automatique. Absents = pas de délai ajouté.
-
-Le paquet est envoyé une seule fois, et le verdict NOS3 s'affiche dans le
-terminal. Si un `[[payload]] name` ne correspond à aucun arg du TC choisi
-(ou si `[secondary_header]` cible un TC sans secondary header), un
-avertissement `[send_packet] champ '...' introuvable — ignoré` s'affiche
-sur stderr et le champ est simplement ignoré (pas d'erreur bloquante).
-
 ---
 
 ## 5. Test différentiel HK — `hk_diff_test`
