@@ -82,7 +82,7 @@ normales).
 | `all`        | catalogue complet (~315 TC, pas de filtre `apps`) | **1 commande par app** du catalogue, envoyées dans l'ordre alphabétique des apps (TC tirée au hasard dans chaque app) |
 | `cross_app`  | catalogue complet (pas de filtre `apps`) | **N commandes** (`cross_app_min_tc` à `cross_app_max_tc`), apps et ordre **aléatoires** — teste les interactions app-à-app |
 | `naive`      | catalogue complet                      | `naive_batch_size` commandes envoyées en rafale, sans attendre le feedback NOS3      |
-| `stateful`   | catalogue complet, filtré par la FSM courante | 1 commande valide selon l'état courant de la machine d'états de l'app choisie |
+
 
 `single_app`/`multi_app` ne diffèrent que par la taille de la liste `apps` —
 dans les deux cas, une seule commande est envoyée par exécution. `all` et
@@ -94,23 +94,6 @@ choix des apps et ordre tirés au hasard à chaque exécution). En `cross_app`,
 chaque app n'apparaît qu'une seule fois par séquence, et le nombre réel de
 commandes est plafonné au nombre d'apps disponibles dans le catalogue filtré
 même si `cross_app_max_tc` est plus grand.
-
-### Mode `stateful` en détail
-
-Le générateur essaie jusqu'à 20 fois une app tirée au hasard : pour chacune,
-il regarde l'état courant de sa machine d'état (FSM, chargée depuis
-`fsm_dir`) et ne garde que les commandes valides depuis cet état, plus les
-commandes qu'une FSM peut déclarer « toujours valides » quel que soit l'état
-(ex: NOOP). **Si aucune commande valide n'est trouvée après 20 essais, le
-générateur abandonne la contrainte d'état et tire une commande complètement
-aléatoire** dans tout le catalogue — donc pas de garantie absolue de
-validité d'état dans ce cas de repli.
-
-L'état de chaque FSM avance ensuite selon le verdict NOS3 reçu :
-- `CRASH`/`TIMEOUT` → l'app est **réinitialisée à son état initial**.
-- `OK` → avance vers l'état suivant si une transition `(état courant, commande
-  envoyée)` existe, sinon reste sur place.
-- tout autre verdict (`DROP_*`) → reste dans l'état courant, sans action.
 
 ### Mutateurs — précisions sur certains d'entre eux
 
@@ -318,29 +301,41 @@ cargo run --bin hk_diff_test -- state_sequences/AUTRE.json  # un autre composant
 
 Déroulement :
 
-1. **Phase 1 (baseline)** — envoie la séquence originale, capture la HK.
+1. **Phase 1 (baseline)** — envoie la séquence originale, capture la télémétrie.
 2. Redémarre NOS3 (`make stop && make launch`) pour repartir d'un état interne propre avant la mutation.
-3. **Phase 2 (mutée)** — mute la séquence (mêmes mutateurs que `cargo run`, configurés dans `fuzz_config.toml`), l'envoie, capture la HK.
+3. **Phase 2 (mutée)** — mute la séquence (mêmes mutateurs que `cargo run`, configurés dans `fuzz_config.toml`), l'envoie, capture la télémétrie.
 4. **Phase 3 (replay)** — renvoie la séquence ORIGINALE, sans redémarrage depuis la phase 2 — c'est justement ce qui permet à un effet résiduel de la mutation de persister jusqu'ici, sinon la phase 3 ne pourrait jamais différer de la phase 1.
-5. Diff automatique entre phase 1 et phase 3 : nombre de trames HK par app, contenu du dernier paquet HK par app, et tout `AttackTag` non nul.
+5. Diff automatique entre phase 1 et phase 3 : nombre de trames par app, contenu du dernier paquet par app, et tout `AttackTag` non nul.
 
-Seule la **vraie HK** est capturée (`MsgId` de l'app ciblée avec `is_TC=0`) —
-commandes, events EVS (ex: `MsgId=0808`, canal partagé texte) et trafic des
-autres apps sur le bus sont exclus. Résultat dans `hk_phase1_baseline.csv` /
-`hk_phase2_mutated.csv` / `hk_phase3_replay.csv` 
+**Toute la télémétrie des apps ciblées est capturée** (`is_TC=0`), pas
+seulement leur paquet HK périodique — les réponses ponctuelles comme
+`DS_GET_FILE_INFO_CC` (info fichier) ou `TBL_SEND_REGISTRY_CC` (registre de
+table) apparaissent aussi dans les CSV, **et leurs events EVS aussi** (ex:
+`MsgId=0808`, canal texte partagé par toutes les apps — mais un event publié
+via `CFE_EVS_SendEvent()` porte l'`AppId` de l'app appelante, pas un `AppId`
+générique EVS, donc il est gardé si l'app est ciblée). Seuls les commandes
+(`is_TC=1`) et le trafic — event EVS compris — des apps qui n'ont rien à voir
+avec la séquence testée restent exclus : l'app source de chaque ligne est
+identifiée par corrélation d'`AppId` avec son paquet HK (`hk_appids` dans
+`hk_diff_test.rs`) — dans cFS, un app = un process = un seul AppId, partagé
+par tout ce qu'il émet (HK, télémétrie ponctuelle, events). Résultat dans
+`hk_phase1_baseline.csv` / `hk_phase2_mutated.csv` / `hk_phase3_replay.csv`
 
-Le `MsgId` HK attendu pour chaque app vient d'une table (`CMD_TO_HK_MID`
-dans `hk_diff_test.rs`) construite à partir des headers `*_msgids.h` du
-dépôt NOS3 — la vraie source de vérité, pas une supposition — et couvre les
-30 apps du catalogue. Ce n'est **pas** un simple calcul (bit 12 à 0) : 8 apps
-sur 30 (CF, DS, ES, FM, LC, SBN, SC, SCH) ont un `MsgId` HK qui ne se déduit
-pas directement du `MsgId` de commande. Si un jour NOS3 ajoute une app
-absente de cette table, l'outil retombe sur ce calcul approximatif et
-prévient sur stderr (`⚠ MsgId ... absent de CMD_TO_HK_MID`).
+Le `MsgId` HK attendu pour chaque app (utilisé comme signal d'ancrage pour
+la corrélation d'AppId ci-dessus, voir `expected_hk_msgids`) vient d'une
+table (`CMD_TO_HK_MID` dans `hk_diff_test.rs`) construite à partir des
+headers `*_msgids.h` du dépôt NOS3 — la vraie source de vérité, pas une
+supposition — et couvre les 30 apps du catalogue. Ce n'est **pas** un simple
+calcul (bit 12 à 0) : 8 apps sur 30 (CF, DS, ES, FM, LC, SBN, SC, SCH) ont un
+`MsgId` HK qui ne se déduit pas directement du `MsgId` de commande. Si un
+jour NOS3 ajoute une app absente de cette table, l'outil retombe sur ce
+calcul approximatif et prévient sur stderr (`⚠ MsgId ... absent de
+CMD_TO_HK_MID`).
 
 Chaque phase attend au maximum 20s la HK attendue ; si rien n'arrive dans ce
-délai, l'outil continue quand même et affiche `⚠` — le CSV peut alors être
-incomplet.
+délai, l'outil continue quand même et affiche `⚠` — dans ce cas l'AppId n'a
+pas pu être corrélé et le CSV de cette phase reste vide, même si l'app a
+émis d'autre télémétrie pendant la fenêtre.
 
 ---
 

@@ -18,16 +18,25 @@
 //! séquences d'état dans le dossier state_sequences/, aussi utilisé par
 //! `cargo run -- --component ...` pour le fuzzing normal, voir README)
 //!
-//! Produit 3 fichiers CSV (lignes HK — is_TC=0 et MsgId de l'app ciblée
-//! uniquement, voir filter_hk_only — observées pendant chaque phase) :
+//! Produit 3 fichiers CSV (toute la télémétrie — is_TC=0, pas seulement le
+//! paquet HK périodique — des apps de la séquence, voir filter_app_telemetry
+//! — observée pendant chaque phase) :
 //!   hk_phase1_baseline.csv → pendant l'envoi de la séquence originale
 //!   hk_phase2_mutated.csv  → pendant l'envoi de la séquence mutée
 //!   hk_phase3_replay.csv   → pendant le second envoi de la séquence originale
 //!
-//! Le reste du trafic bus (commandes, events EVS, scheduler, autres apps...)
-//! capté par /tmp/logids_p3.csv pendant la fenêtre est ignoré — seule la
-//! vraie HK des apps de la séquence est gardée, pour ne comparer que ce qui
-//! est pertinent.
+//! Les commandes (is_TC=1) et le trafic des apps qui n'ont rien à voir avec
+//! la séquence testée sont exclus — mais toute la télémétrie DES APPS
+//! CIBLÉES est gardée, pas seulement leur HK périodique : les réponses
+//! ponctuelles comme DS_GET_FILE_INFO_CC (info fichier) ou
+//! TBL_SEND_REGISTRY_CC (registre de table) apparaissent aussi dans les CSV
+//! — et leurs events EVS aussi (CFE_ES_GetAppID() est appelé côté envoi dans
+//! CFE_SB_TransmitMsg, donc un event publié via CFE_EVS_SendEvent() porte
+//! l'AppId de l'app appelante, pas un AppId générique EVS — voir hk_appids).
+//! Seuls les events des AUTRES apps (hors séquence testée) sont filtrés,
+//! pas les events EVS en général. L'app source de chaque ligne est
+//! identifiée par corrélation d'AppId avec son paquet HK (voir hk_appids)
+//! plutôt que par une seconde table de MsgId à maintenir à la main.
 
 use std::collections::HashSet;
 use std::io::Write;
@@ -172,19 +181,33 @@ fn expected_hk_msgids(seq: &CcsdsSequenceInput) -> Vec<String> {
         .collect()
 }
 
-/// Ne garde que les lignes de VRAIE HK — is_TC=0 et MsgId parmi ceux
-/// attendus pour la séquence (voir expected_hk_msgids) — pour exclure les
-/// commandes, les events EVS (ex: MsgId=0808, canal partagé par plein
-/// d'apps, contient du texte d'event et pas de la HK), le scheduler et le
-/// trafic des autres apps qui passent aussi sur le bus mais n'ont rien à
-/// voir avec la séquence testée.
-fn filter_hk_only(lines: &[String], expected_msgids: &[String]) -> Vec<String> {
+/// AppId (colonne 6 du CSV, App ID cFE ES du process) des apps ciblées par
+/// la séquence — déduit par corrélation avec leur paquet HK périodique
+/// (is_TC=0, MsgId parmi expected_hk_msgids) plutôt que par une table
+/// séparée : dans cFS, un app = un process = un AppId unique, partagé par
+/// tous les messages qu'il émet (HK et le reste), donc l'AppId vu sur son
+/// paquet HK identifie aussi bien sa télémétrie ponctuelle.
+fn hk_appids(lines: &[String], expected_hk_msgids: &[String]) -> HashSet<String> {
+    lines
+        .iter()
+        .filter_map(|line| parse_row(line))
+        .filter(|r| r.is_tc == "0" && expected_hk_msgids.iter().any(|m| m == r.msgid))
+        .map(|r| r.appid.to_string())
+        .collect()
+}
+
+/// Ne garde que la télémétrie (is_TC=0) émise par les AppId identifiés via
+/// hk_appids — c'est-à-dire toute la télémétrie des apps ciblées par la
+/// séquence : HK périodique, réponses ponctuelles (DS_GET_FILE_INFO_CC,
+/// TBL_SEND_REGISTRY_CC, ...) ET leurs events EVS (même AppId que le reste
+/// de l'app, voir le commentaire en tête de fichier). Exclut les commandes
+/// (is_TC=1) et tout le trafic — event EVS compris — des apps qui n'ont rien
+/// à voir avec la séquence testée.
+fn filter_app_telemetry(lines: &[String], target_appids: &HashSet<String>) -> Vec<String> {
     lines
         .iter()
         .filter(|line| {
-            parse_msgid_is_tc(line).is_some_and(|(msgid, is_tc)| {
-                is_tc == "0" && expected_msgids.iter().any(|m| m == msgid)
-            })
+            parse_row(line).is_some_and(|r| r.is_tc == "0" && target_appids.contains(r.appid))
         })
         .cloned()
         .collect()
@@ -355,39 +378,41 @@ fn send_sequence(seq: &CcsdsSequenceInput, label: &str) {
 }
 
 /// Envoie la séquence, attend qu'un cycle HK des apps ciblées apparaisse
-/// (plutôt qu'un délai fixe), puis ne garde que les lignes de vraie HK
-/// (filter_hk_only) parmi tout ce qui a été capté sur le bus pendant cette
-/// fenêtre — le fichier écrit et les lignes retournées (pour diff_phases)
-/// sont donc uniquement la HK des apps de la séquence, sans le bruit
-/// (commandes, events EVS, scheduler, autres apps).
+/// (plutôt qu'un délai fixe, voir wait_for_hk), déduit l'AppId de ces apps
+/// par corrélation avec ce paquet HK (hk_appids), puis garde toute leur
+/// télémétrie (filter_app_telemetry) captée sur le bus pendant cette fenêtre
+/// — le fichier écrit et les lignes retournées (pour diff_phases) couvrent
+/// donc HK + réponses ponctuelles + events EVS des apps de la séquence, sans
+/// le bruit des autres (commandes, scheduler, apps hors séquence).
 fn run_phase(seq: &CcsdsSequenceInput, label: &str, out_file: &str) -> Vec<String> {
     let before = hk_line_count();
     send_sequence(seq, label);
 
     let expected = expected_hk_msgids(seq);
     let (new_lines, found) = wait_for_hk(before, &expected);
-    let hk_lines = filter_hk_only(&new_lines, &expected);
+    let target_appids = hk_appids(&new_lines, &expected);
+    let tlm_lines = filter_app_telemetry(&new_lines, &target_appids);
 
-    std::fs::write(out_file, format_hk_table(&hk_lines)).expect("écriture du fichier HK échouée");
+    std::fs::write(out_file, format_hk_table(&tlm_lines)).expect("écriture du fichier HK échouée");
     if found {
         println!(
-            "[hk_diff_test] HK attendue vue — {} ligne(s) HK capturée(s) (sur {} lignes de trafic bus total) → {out_file}",
-            hk_lines.len(), new_lines.len()
+            "[hk_diff_test] HK attendue vue — {} ligne(s) télémétrie capturée(s) (sur {} lignes de trafic bus total) → {out_file}",
+            tlm_lines.len(), new_lines.len()
         );
     } else {
         println!(
-            "[hk_diff_test] ⚠ timeout ({}s) sans voir la HK attendue (MsgId {:?}) — {} ligne(s) HK capturée(s) quand même (sur {} lignes de trafic bus total) → {out_file}",
-            HK_MAX_WAIT.as_secs(), expected, hk_lines.len(), new_lines.len()
+            "[hk_diff_test] ⚠ timeout ({}s) sans voir la HK attendue (MsgId {:?}) — {} ligne(s) télémétrie capturée(s) quand même (sur {} lignes de trafic bus total) → {out_file}",
+            HK_MAX_WAIT.as_secs(), expected, tlm_lines.len(), new_lines.len()
         );
     }
-    hk_lines
+    tlm_lines
 }
 
-/// Compare la HK capté en phase 1 (baseline) et en phase 3 (replay de la
-/// même séquence après la mutation intercalée en phase 2) — trois
-/// vérifications : apps qui ont émis plus/moins de HK que la baseline, le
-/// contenu du dernier paquet HK par app (un octet différent au-delà du
-/// bruit normal — compteurs, timestamps — est le signal le plus direct d'un
+/// Compare la télémétrie captée en phase 1 (baseline) et en phase 3 (replay
+/// de la même séquence après la mutation intercalée en phase 2) — trois
+/// vérifications : apps qui ont émis plus/moins de paquets que la baseline,
+/// le contenu du dernier paquet par app (un octet différent au-delà du bruit
+/// normal — compteurs, timestamps — est le signal le plus direct d'un
 /// changement d'état interne), et tout AttackTag non nul (signal le plus
 /// direct d'un résidu de la séquence mutée).
 fn diff_phases(baseline: &[String], replay: &[String]) -> String {
@@ -591,21 +616,43 @@ mod tests {
         assert!(report.contains("NAV"), "doit nommer l'app concernée:\n{report}");
     }
 
-    /// filter_hk_only doit exclure les commandes (is_TC=1), les events EVS
-    /// partagés (MsgId=0808, hors de la liste attendue) et le trafic d'une
-    /// app non ciblée — ne garder que la vraie HK (is_TC=0, MsgId attendu).
+    /// hk_appids doit déduire l'AppId (colonne 6) à partir du paquet HK
+    /// (is_TC=0, MsgId attendu) — pas des commandes ni d'un MsgId hors
+    /// liste — pour ensuite pouvoir élargir le filtre à toute la télémétrie
+    /// de cet AppId.
     #[test]
-    fn filter_hk_only_keeps_true_hk_only() {
+    fn hk_appids_correlates_appid_from_hk_packet_only() {
         let expected = vec!["0870".to_string()];
         let lines = vec![
-            "2504500000,259.1,1870,0,1,111,NAV,0,-1,1870c00000010000".to_string(), // commande NAV
-            "2504500000,259.2,0808,-1,0,112,TO_LAB_APP,0,-1,4e4f56415400".to_string(), // event EVS
-            "2504500000,259.3,0870,-1,0,111,NAV,0,-1,0870c0000001aabbcc".to_string(), // vraie HK NAV
+            "2504500000,259.1,1870,0,1,111,NAV,0,-1,1870c00000010000".to_string(), // commande NAV (is_TC=1)
+            "2504500000,259.2,0808,-1,0,112,TO_LAB_APP,0,-1,4e4f56415400".to_string(), // event EVS, MsgId hors liste
+            "2504500000,259.3,0870,-1,0,111,NAV,0,-1,0870c0000001aabbcc".to_string(), // vraie HK NAV, AppId=111
         ];
 
-        let filtered = filter_hk_only(&lines, &expected);
+        let appids = hk_appids(&lines, &expected);
 
-        assert_eq!(filtered.len(), 1, "attendu une seule ligne HK gardée:\n{filtered:?}");
-        assert!(filtered[0].contains("0870c0000001aabbcc"));
+        assert_eq!(appids.len(), 1, "attendu un seul AppId déduit:\n{appids:?}");
+        assert!(appids.contains("111"));
+    }
+
+    /// filter_app_telemetry doit exclure les commandes (is_TC=1) et le
+    /// trafic d'un AppId non ciblé, mais garder TOUTE la télémétrie de
+    /// l'AppId ciblé — pas seulement son paquet HK (ex: une réponse
+    /// ponctuelle sur un MsgId différent, ici 0871).
+    #[test]
+    fn filter_app_telemetry_keeps_all_target_appid_tlm() {
+        let target: HashSet<String> = ["111".to_string()].into_iter().collect();
+        let lines = vec![
+            "2504500000,259.1,1870,0,1,111,NAV,0,-1,1870c00000010000".to_string(), // commande NAV (is_TC=1) — exclue
+            "2504500000,259.2,0808,-1,0,112,TO_LAB_APP,0,-1,4e4f56415400".to_string(), // event EVS, AppId non ciblé — exclue
+            "2504500000,259.3,0870,-1,0,111,NAV,0,-1,0870c0000001aabbcc".to_string(), // HK NAV — gardée
+            "2504500000,259.4,0871,-1,0,111,NAV,0,-1,0871c000000102".to_string(), // réponse ponctuelle NAV, MsgId différent — gardée
+        ];
+
+        let filtered = filter_app_telemetry(&lines, &target);
+
+        assert_eq!(filtered.len(), 2, "attendu HK + réponse ponctuelle gardées:\n{filtered:?}");
+        assert!(filtered.iter().any(|l| l.contains("0870c0000001aabbcc")));
+        assert!(filtered.iter().any(|l| l.contains("0871c000000102")));
     }
 }

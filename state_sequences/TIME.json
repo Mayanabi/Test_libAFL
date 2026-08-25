@@ -1,0 +1,918 @@
+{
+  "commands": [
+    {
+      "step": 1,
+      "tc_name": "CFE_TIME_NOOP_CC",
+      "fuzz": false,
+      "delay_min_ms": 300,
+      "delay_max_ms": 300,
+      "args": [
+        {
+          "name": "ID",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x1805",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SEQ",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0xC000",
+          "endianness": "BIG"
+        },
+        {
+          "name": "LEN",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x0001",
+          "endianness": "BIG"
+        },
+        {
+          "name": "FC",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x00",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CHECKSUM",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x00",
+          "endianness": "BIG"
+        }
+      ],
+      "target": "CFS",
+      "port": 5012
+    },
+    {
+      "step": 2,
+      "tc_name": "CFE_TIME_SET_STATE_CC",
+      "fuzz": true,
+      "delay_min_ms": 300,
+      "delay_max_ms": 300,
+      "args": [
+        {
+          "name": "ID",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x1805",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SEQ",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0xC000",
+          "endianness": "BIG"
+        },
+        {
+          "name": "LEN",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x0001",
+          "endianness": "BIG"
+        },
+        {
+          "name": "FC",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x04",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CHECKSUM",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x00",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CLOCKSTATE",
+          "arg_type": "INT",
+          "size_bits": 16,
+          "value": "0"
+        }
+      ],
+      "target": "CFS",
+      "port": 5012
+    },
+    {
+      "step": 3,
+      "tc_name": "CFE_TIME_SET_STATE_CC",
+      "fuzz": true,
+      "delay_min_ms": 300,
+      "delay_max_ms": 300,
+      "args": [
+        {
+          "name": "ID",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x1805",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SEQ",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0xC000",
+          "endianness": "BIG"
+        },
+        {
+          "name": "LEN",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x0001",
+          "endianness": "BIG"
+        },
+        {
+          "name": "FC",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x04",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CHECKSUM",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x00",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CLOCKSTATE",
+          "arg_type": "INT",
+          "size_bits": 16,
+          "value": "0"
+        }
+      ],
+      "target": "CFS",
+      "port": 5012
+    },
+    {
+      "step": 4,
+      "tc_name": "CFE_TIME_SET_STATE_CC",
+      "fuzz": true,
+      "delay_min_ms": 300,
+      "delay_max_ms": 300,
+      "args": [
+        {
+          "name": "ID",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x1805",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SEQ",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0xC000",
+          "endianness": "BIG"
+        },
+        {
+          "name": "LEN",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x0001",
+          "endianness": "BIG"
+        },
+        {
+          "name": "FC",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x04",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CHECKSUM",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x00",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CLOCKSTATE",
+          "arg_type": "INT",
+          "size_bits": 16,
+          "value": "0"
+        }
+      ],
+      "target": "CFS",
+      "port": 5012
+    },
+    {
+      "step": 5,
+      "tc_name": "CFE_TIME_RESET_COUNTERS_CC",
+      "fuzz": true,
+      "delay_min_ms": 300,
+      "delay_max_ms": 300,
+      "args": [
+        {
+          "name": "ID",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x1805",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SEQ",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0xC000",
+          "endianness": "BIG"
+        },
+        {
+          "name": "LEN",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x0001",
+          "endianness": "BIG"
+        },
+        {
+          "name": "FC",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x01",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CHECKSUM",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x00",
+          "endianness": "BIG"
+        }
+      ],
+      "target": "CFS",
+      "port": 5012
+    },
+    {
+      "step": 6,
+      "tc_name": "CFE_TIME_SEND_DIAGNOSTIC_TLM_CC",
+      "fuzz": true,
+      "delay_min_ms": 300,
+      "delay_max_ms": 300,
+      "args": [
+        {
+          "name": "ID",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x1805",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SEQ",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0xC000",
+          "endianness": "BIG"
+        },
+        {
+          "name": "LEN",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x0001",
+          "endianness": "BIG"
+        },
+        {
+          "name": "FC",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x02",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CHECKSUM",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x00",
+          "endianness": "BIG"
+        }
+      ],
+      "target": "CFS",
+      "port": 5012
+    },
+    {
+      "step": 7,
+      "tc_name": "CFE_TIME_SET_SOURCE_CC",
+      "fuzz": true,
+      "delay_min_ms": 300,
+      "delay_max_ms": 300,
+      "args": [
+        {
+          "name": "ID",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x1805",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SEQ",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0xC000",
+          "endianness": "BIG"
+        },
+        {
+          "name": "LEN",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x0001",
+          "endianness": "BIG"
+        },
+        {
+          "name": "FC",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x03",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CHECKSUM",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x00",
+          "endianness": "BIG"
+        },
+        {
+          "name": "TIMESOURCE",
+          "arg_type": "INT",
+          "size_bits": 16,
+          "value": "0"
+        }
+      ],
+      "target": "CFS",
+      "port": 5012
+    },
+    {
+      "step": 8,
+      "tc_name": "CFE_TIME_ADD_DELAY_CC",
+      "fuzz": true,
+      "delay_min_ms": 300,
+      "delay_max_ms": 300,
+      "args": [
+        {
+          "name": "ID",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x1805",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SEQ",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0xC000",
+          "endianness": "BIG"
+        },
+        {
+          "name": "LEN",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x0001",
+          "endianness": "BIG"
+        },
+        {
+          "name": "FC",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x05",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CHECKSUM",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x00",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SECONDS",
+          "arg_type": "UINT",
+          "size_bits": 32,
+          "value": "0"
+        },
+        {
+          "name": "MICROSECONDS",
+          "arg_type": "UINT",
+          "size_bits": 32,
+          "value": "0"
+        }
+      ],
+      "target": "CFS",
+      "port": 5012
+    },
+    {
+      "step": 9,
+      "tc_name": "CFE_TIME_SUB_DELAY_CC",
+      "fuzz": true,
+      "delay_min_ms": 300,
+      "delay_max_ms": 300,
+      "args": [
+        {
+          "name": "ID",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x1805",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SEQ",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0xC000",
+          "endianness": "BIG"
+        },
+        {
+          "name": "LEN",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x0001",
+          "endianness": "BIG"
+        },
+        {
+          "name": "FC",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x06",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CHECKSUM",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x00",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SECONDS",
+          "arg_type": "UINT",
+          "size_bits": 32,
+          "value": "0"
+        },
+        {
+          "name": "MICROSECONDS",
+          "arg_type": "UINT",
+          "size_bits": 32,
+          "value": "0"
+        }
+      ],
+      "target": "CFS",
+      "port": 5012
+    },
+    {
+      "step": 10,
+      "tc_name": "CFE_TIME_SET_MET_CC",
+      "fuzz": true,
+      "delay_min_ms": 300,
+      "delay_max_ms": 300,
+      "args": [
+        {
+          "name": "ID",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x1805",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SEQ",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0xC000",
+          "endianness": "BIG"
+        },
+        {
+          "name": "LEN",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x0001",
+          "endianness": "BIG"
+        },
+        {
+          "name": "FC",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x08",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CHECKSUM",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x00",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SECONDS",
+          "arg_type": "UINT",
+          "size_bits": 32,
+          "value": "0"
+        },
+        {
+          "name": "MICROSECONDS",
+          "arg_type": "UINT",
+          "size_bits": 32,
+          "value": "0"
+        }
+      ],
+      "target": "CFS",
+      "port": 5012
+    },
+    {
+      "step": 11,
+      "tc_name": "CFE_TIME_SET_STCF_CC",
+      "fuzz": true,
+      "delay_min_ms": 300,
+      "delay_max_ms": 300,
+      "args": [
+        {
+          "name": "ID",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x1805",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SEQ",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0xC000",
+          "endianness": "BIG"
+        },
+        {
+          "name": "LEN",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x0001",
+          "endianness": "BIG"
+        },
+        {
+          "name": "FC",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x09",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CHECKSUM",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x00",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SECONDS",
+          "arg_type": "UINT",
+          "size_bits": 32,
+          "value": "0"
+        },
+        {
+          "name": "MICROSECONDS",
+          "arg_type": "UINT",
+          "size_bits": 32,
+          "value": "0"
+        }
+      ],
+      "target": "CFS",
+      "port": 5012
+    },
+    {
+      "step": 12,
+      "tc_name": "CFE_TIME_SET_LEAP_SECONDS_CC",
+      "fuzz": true,
+      "delay_min_ms": 300,
+      "delay_max_ms": 300,
+      "args": [
+        {
+          "name": "ID",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x1805",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SEQ",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0xC000",
+          "endianness": "BIG"
+        },
+        {
+          "name": "LEN",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x0001",
+          "endianness": "BIG"
+        },
+        {
+          "name": "FC",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x0A",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CHECKSUM",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x00",
+          "endianness": "BIG"
+        },
+        {
+          "name": "LEAPSECONDS",
+          "arg_type": "INT",
+          "size_bits": 16,
+          "value": "0"
+        }
+      ],
+      "target": "CFS",
+      "port": 5012
+    },
+    {
+      "step": 13,
+      "tc_name": "CFE_TIME_ADD_ADJUST_CC",
+      "fuzz": true,
+      "delay_min_ms": 300,
+      "delay_max_ms": 300,
+      "args": [
+        {
+          "name": "ID",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x1805",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SEQ",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0xC000",
+          "endianness": "BIG"
+        },
+        {
+          "name": "LEN",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x0001",
+          "endianness": "BIG"
+        },
+        {
+          "name": "FC",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x0B",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CHECKSUM",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x00",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SECONDS",
+          "arg_type": "UINT",
+          "size_bits": 32,
+          "value": "0"
+        },
+        {
+          "name": "MICROSECONDS",
+          "arg_type": "UINT",
+          "size_bits": 32,
+          "value": "0"
+        }
+      ],
+      "target": "CFS",
+      "port": 5012
+    },
+    {
+      "step": 14,
+      "tc_name": "CFE_TIME_SUB_ADJUST_CC",
+      "fuzz": true,
+      "delay_min_ms": 300,
+      "delay_max_ms": 300,
+      "args": [
+        {
+          "name": "ID",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x1805",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SEQ",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0xC000",
+          "endianness": "BIG"
+        },
+        {
+          "name": "LEN",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x0001",
+          "endianness": "BIG"
+        },
+        {
+          "name": "FC",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x0C",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CHECKSUM",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x00",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SECONDS",
+          "arg_type": "UINT",
+          "size_bits": 32,
+          "value": "0"
+        },
+        {
+          "name": "MICROSECONDS",
+          "arg_type": "UINT",
+          "size_bits": 32,
+          "value": "0"
+        }
+      ],
+      "target": "CFS",
+      "port": 5012
+    },
+    {
+      "step": 15,
+      "tc_name": "CFE_TIME_ADD_1HZ_ADJUSTMENT_CC",
+      "fuzz": true,
+      "delay_min_ms": 300,
+      "delay_max_ms": 300,
+      "args": [
+        {
+          "name": "ID",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x1805",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SEQ",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0xC000",
+          "endianness": "BIG"
+        },
+        {
+          "name": "LEN",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x0001",
+          "endianness": "BIG"
+        },
+        {
+          "name": "FC",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x0D",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CHECKSUM",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x00",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SECONDS",
+          "arg_type": "UINT",
+          "size_bits": 32,
+          "value": "0"
+        },
+        {
+          "name": "MICROSECONDS",
+          "arg_type": "UINT",
+          "size_bits": 32,
+          "value": "0"
+        }
+      ],
+      "target": "CFS",
+      "port": 5012
+    },
+    {
+      "step": 16,
+      "tc_name": "CFE_TIME_SUB_1HZ_ADJUSTMENT_CC",
+      "fuzz": true,
+      "delay_min_ms": 300,
+      "delay_max_ms": 300,
+      "args": [
+        {
+          "name": "ID",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x1805",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SEQ",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0xC000",
+          "endianness": "BIG"
+        },
+        {
+          "name": "LEN",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x0001",
+          "endianness": "BIG"
+        },
+        {
+          "name": "FC",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x0E",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CHECKSUM",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x00",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SECONDS",
+          "arg_type": "UINT",
+          "size_bits": 32,
+          "value": "0"
+        },
+        {
+          "name": "MICROSECONDS",
+          "arg_type": "UINT",
+          "size_bits": 32,
+          "value": "0"
+        }
+      ],
+      "target": "CFS",
+      "port": 5012
+    },
+    {
+      "step": 17,
+      "tc_name": "CFE_TIME_SET_SIGNAL_CC",
+      "fuzz": true,
+      "delay_min_ms": 0,
+      "delay_max_ms": 0,
+      "args": [
+        {
+          "name": "ID",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x1805",
+          "endianness": "BIG"
+        },
+        {
+          "name": "SEQ",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0xC000",
+          "endianness": "BIG"
+        },
+        {
+          "name": "LEN",
+          "arg_type": "UINT",
+          "size_bits": 16,
+          "value": "0x0001",
+          "endianness": "BIG"
+        },
+        {
+          "name": "FC",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x0F",
+          "endianness": "BIG"
+        },
+        {
+          "name": "CHECKSUM",
+          "arg_type": "UINT",
+          "size_bits": 8,
+          "value": "0x00",
+          "endianness": "BIG"
+        },
+        {
+          "name": "TONESOURCE",
+          "arg_type": "INT",
+          "size_bits": 16,
+          "value": "0"
+        }
+      ],
+      "target": "CFS",
+      "port": 5012
+    }
+  ]
+}
