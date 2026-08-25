@@ -1,17 +1,16 @@
-//! Test différentiel HK : envoie une séquence valide, la mute (avec les
-//! mêmes mutateurs que cargo run), la renvoie, puis renvoie la séquence
-//! ORIGINALE une seconde fois — pour voir si l'état interne des composants
-//! (HK, capté par le logger Software Bus dans /tmp/logids_p3.csv à
-//! l'intérieur du conteneur nos-fsw) diffère entre les deux envois de la
-//! séquence nominale.
+//! Envoie une séquence connue à NOS3 en 3 phases (originale, mutée, puis
+//! originale une seconde fois) et capture la télémétrie observée sur le bus
+//! (logger Software Bus, /tmp/logids_p3.csv à l'intérieur du conteneur
+//! nos-fsw) pendant chacune — aucune comparaison automatique, les 3 CSV
+//! produits sont à consulter toi-même.
 //!
 //! NOS3 est redémarré (make stop && make launch) UNIQUEMENT entre la phase 1
 //! et la phase 2 — pour que la séquence mutée (phase 2) parte d'un état
 //! interne connu (compteurs HK à zéro), sans le bruit d'un éventuel run
-//! précédent. Aucun redémarrage entre la phase 2 et la phase 3 : c'est
-//! justement ce qui permet à un effet résiduel de la séquence mutée de
-//! persister jusqu'au second envoi de la séquence originale — sans ce
-//! résidu, la phase 3 ne pourrait jamais différer de la phase 1.
+//! précédent. Aucun redémarrage entre la phase 2 et la phase 3 : c'est ce
+//! qui permet à un effet résiduel de la séquence mutée de persister jusqu'au
+//! second envoi de la séquence originale, visible en comparant
+//! hk_phase1_baseline.csv et hk_phase3_replay.csv.
 //!
 //! Usage : cargo run --bin hk_diff_test [-- chemin/vers/sequence.json]
 //! (par défaut : state_sequences/NOVATEL_OEM615.json — voir le catalogue de
@@ -277,8 +276,8 @@ const COL_ATTACK: usize = 6;
 const COL_ALLOWED: usize = 10;
 
 /// Tronque le hex d'un paquet à PACKET_HEX_PREVIEW_LEN caractères, avec le
-/// nombre d'octets omis affiché à côté — partagé entre format_hk_table (une
-/// ligne) et diff_phases (comparaison du dernier paquet HK par app).
+/// nombre d'octets omis affiché à côté — utilisé par format_hk_table pour
+/// qu'une ligne ne dépasse pas ~200 caractères.
 fn preview_hex(hex: &str) -> String {
     let total = hex.len();
     let n = total.min(PACKET_HEX_PREVIEW_LEN);
@@ -381,10 +380,10 @@ fn send_sequence(seq: &CcsdsSequenceInput, label: &str) {
 /// (plutôt qu'un délai fixe, voir wait_for_hk), déduit l'AppId de ces apps
 /// par corrélation avec ce paquet HK (hk_appids), puis garde toute leur
 /// télémétrie (filter_app_telemetry) captée sur le bus pendant cette fenêtre
-/// — le fichier écrit et les lignes retournées (pour diff_phases) couvrent
-/// donc HK + réponses ponctuelles + events EVS des apps de la séquence, sans
-/// le bruit des autres (commandes, scheduler, apps hors séquence).
-fn run_phase(seq: &CcsdsSequenceInput, label: &str, out_file: &str) -> Vec<String> {
+/// — le fichier écrit couvre donc HK + réponses ponctuelles + events EVS des
+/// apps de la séquence, sans le bruit des autres (commandes, scheduler, apps
+/// hors séquence).
+fn run_phase(seq: &CcsdsSequenceInput, label: &str, out_file: &str) {
     let before = hk_line_count();
     send_sequence(seq, label);
 
@@ -405,102 +404,6 @@ fn run_phase(seq: &CcsdsSequenceInput, label: &str, out_file: &str) -> Vec<Strin
             HK_MAX_WAIT.as_secs(), expected, tlm_lines.len(), new_lines.len()
         );
     }
-    tlm_lines
-}
-
-/// Compare la télémétrie captée en phase 1 (baseline) et en phase 3 (replay
-/// de la même séquence après la mutation intercalée en phase 2) — trois
-/// vérifications : apps qui ont émis plus/moins de paquets que la baseline,
-/// le contenu du dernier paquet par app (un octet différent au-delà du bruit
-/// normal — compteurs, timestamps — est le signal le plus direct d'un
-/// changement d'état interne), et tout AttackTag non nul (signal le plus
-/// direct d'un résidu de la séquence mutée).
-fn diff_phases(baseline: &[String], replay: &[String]) -> String {
-    let mut out = String::new();
-    out.push_str("[hk_diff_test] === Diff automatique : phase1 (baseline) vs phase3 (replay) ===\n");
-
-    let mut any_diff = false;
-
-    // 1. Comptage par app
-    let mut base_apps: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
-    let mut replay_apps: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
-    for l in baseline {
-        if let Some(r) = parse_row(l) {
-            *base_apps.entry(r.task_name).or_insert(0) += 1;
-        }
-    }
-    for l in replay {
-        if let Some(r) = parse_row(l) {
-            *replay_apps.entry(r.task_name).or_insert(0) += 1;
-        }
-    }
-    let mut all_apps: Vec<&&str> = base_apps.keys().chain(replay_apps.keys()).collect();
-    all_apps.sort();
-    all_apps.dedup();
-    for app in all_apps {
-        let b = base_apps.get(app).copied().unwrap_or(0);
-        let r = replay_apps.get(app).copied().unwrap_or(0);
-        if b != r {
-            any_diff = true;
-            out.push_str(&format!(
-                "  [App]       {app:<15} baseline={b:<4} replay={r:<4} (écart {:+})\n",
-                r as isize - b as isize
-            ));
-        }
-    }
-
-    // 2. Contenu du dernier paquet HK par app — comparé octet pour octet,
-    // affiché en aperçu tronqué (mêmes règles que format_hk_table) pour que
-    // l'écart soit visible directement dans le rapport sans rouvrir les CSV.
-    let mut base_last: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
-    let mut replay_last: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
-    for l in baseline {
-        if let Some(r) = parse_row(l) {
-            base_last.insert(r.task_name, r.packet_hex);
-        }
-    }
-    for l in replay {
-        if let Some(r) = parse_row(l) {
-            replay_last.insert(r.task_name, r.packet_hex);
-        }
-    }
-    let mut apps_with_both: Vec<&&str> = base_last
-        .keys()
-        .filter(|app| replay_last.contains_key(**app))
-        .collect();
-    apps_with_both.sort();
-    for app in apps_with_both {
-        let b = base_last[*app];
-        let r = replay_last[*app];
-        if b != r {
-            any_diff = true;
-            out.push_str(&format!(
-                "  [Paquet]    {app:<15} dernier paquet HK différent (baseline: {} | replay: {})\n",
-                preview_hex(b), preview_hex(r)
-            ));
-        }
-    }
-
-    // 3. AttackTag non nul — le signal le plus direct d'un résidu de la
-    // séquence mutée (ne devrait jamais apparaître sur une séquence nominale).
-    for (label, lines) in [("baseline", baseline), ("replay", replay)] {
-        for l in lines {
-            if let Some(r) = parse_row(l) {
-                if r.attack_tag != "0" {
-                    any_diff = true;
-                    out.push_str(&format!(
-                        "  [AttackTag] {label}: tag={} MsgId={} App={} à t={}s\n",
-                        r.attack_tag, r.msgid, r.task_name, r.realtime
-                    ));
-                }
-            }
-        }
-    }
-
-    if !any_diff {
-        out.push_str("  Aucune différence significative détectée entre baseline et replay.\n");
-    }
-    out
 }
 
 fn main() {
@@ -516,7 +419,7 @@ fn main() {
     let mut state = MiniState { rand: StdRand::with_seed(current_nanos()) };
 
     println!("[hk_diff_test] === Phase 1 : séquence originale (baseline) ===");
-    let baseline_lines = run_phase(&original, "baseline", "hk_phase1_baseline.csv");
+    run_phase(&original, "baseline", "hk_phase1_baseline.csv");
 
     println!("[hk_diff_test] Redémarrage NOS3 avant la phase 2 (repartir d'un état propre)...");
     nos3_control::restart_nos3();
@@ -529,10 +432,7 @@ fn main() {
     run_phase(&mutated, "mutée", "hk_phase2_mutated.csv");
 
     println!("[hk_diff_test] === Phase 3 : re-rejeu de la séquence originale ===");
-    let replay_lines = run_phase(&original, "replay original", "hk_phase3_replay.csv");
-
-    println!();
-    print!("{}", diff_phases(&baseline_lines, &replay_lines));
+    run_phase(&original, "replay original", "hk_phase3_replay.csv");
 
     println!();
     println!("[hk_diff_test] Terminé. Détails dans hk_phase1_baseline.csv / hk_phase2_mutated.csv / hk_phase3_replay.csv");
@@ -561,59 +461,6 @@ mod tests {
             table.lines().all(|l| l.len() < 200),
             "aucune ligne du tableau ne doit dépasser ~200 caractères:\n{table}"
         );
-    }
-
-    /// Baseline et replay identiques (même app, même FC, AttackTag=0
-    /// partout) → aucune différence ne doit être remontée.
-    #[test]
-    fn diff_phases_reports_nothing_when_identical() {
-        let baseline = vec!["2504500000,259.1,1870,2,1,111,NAV,0,-1,1870".to_string()];
-        let replay = vec!["2504500000,300.1,1870,2,1,111,NAV,0,-1,1870".to_string()];
-
-        let report = diff_phases(&baseline, &replay);
-        assert!(report.contains("Aucune différence"), "attendu aucune diff:\n{report}");
-    }
-
-    /// Un AttackTag non nul en replay (résidu potentiel de la mutation) doit
-    /// être signalé explicitement — c'est le signal le plus important que
-    /// cet outil est censé faire remonter.
-    #[test]
-    fn diff_phases_flags_nonzero_attack_tag() {
-        let baseline = vec!["2504500000,259.1,1870,2,1,111,NAV,0,-1,1870".to_string()];
-        let replay = vec!["2504500000,300.1,1870,2,1,111,NAV,1,-1,1870".to_string()];
-
-        let report = diff_phases(&baseline, &replay);
-        assert!(report.contains("[AttackTag]"), "attendu un signalement AttackTag:\n{report}");
-        assert!(!report.contains("Aucune différence"), "ne doit pas dire 'aucune différence':\n{report}");
-    }
-
-    /// Un écart de comptage par app (une app qui parle plus/moins) doit
-    /// aussi être signalé.
-    #[test]
-    fn diff_phases_flags_app_count_mismatch() {
-        let baseline = vec![
-            "2504500000,259.1,1870,2,1,111,NAV,0,-1,1870".to_string(),
-            "2504500000,259.2,1870,2,1,111,NAV,0,-1,1870".to_string(),
-        ];
-        let replay = vec!["2504500000,300.1,1870,2,1,111,NAV,0,-1,1870".to_string()];
-
-        let report = diff_phases(&baseline, &replay);
-        assert!(report.contains("[App]"), "attendu un signalement App:\n{report}");
-        assert!(report.contains("NAV"), "doit nommer l'app concernée:\n{report}");
-    }
-
-    /// Un dernier paquet HK dont le contenu diffère entre baseline et replay
-    /// (même app présente des deux côtés) doit être signalé — c'est le
-    /// signal ajouté pour ne comparer que le contenu de la vraie HK plutôt
-    /// que tout le trafic bus.
-    #[test]
-    fn diff_phases_flags_packet_content_mismatch() {
-        let baseline = vec!["2504500000,259.1,0870,-1,0,111,NAV,0,-1,0870c0000001aabbcc".to_string()];
-        let replay = vec!["2504500000,300.1,0870,-1,0,111,NAV,0,-1,0870c0000001ffeedd".to_string()];
-
-        let report = diff_phases(&baseline, &replay);
-        assert!(report.contains("[Paquet]"), "attendu un signalement Paquet:\n{report}");
-        assert!(report.contains("NAV"), "doit nommer l'app concernée:\n{report}");
     }
 
     /// hk_appids doit déduire l'AppId (colonne 6) à partir du paquet HK

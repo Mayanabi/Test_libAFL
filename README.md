@@ -32,7 +32,7 @@ fonctionnent (le code nettoie au passage les variables d'env `GTK_PATH`/
 | Fuzzing automatique + figer certains champs                    | `cargo run -- --fixed-fields`  |
 | Fuzzing automatique à partir d'une séquence d'état connue      | `cargo run -- --component`     |
 | Envoyer **un seul** paquet fait main (faux flags, valeur précise) | `cargo run --bin send_packet`  |
-| Test différentiel HK (baseline / mutée / replay)                | `cargo run --bin hk_diff_test` |
+| Capturer la télémétrie en 3 phases (baseline / mutée / replay)  | `cargo run --bin hk_diff_test` |
 | Rejouer un crash trouvé par le fuzzer (`./crashes/`)            | `python3 wrapper.py < crashes/<hash>` |
 | Rejouer une séquence câblée en dur (bug déjà documenté)         | scripts Python (`replay_*.py`) |
 
@@ -282,14 +282,15 @@ cible l'un de ces noms est ignoré avec un avertissement) :
 name  = "NOM_DU_PARAM"   # nom de l'arg tel qu'il apparaît dans catalogue_dump.json
 value = "valeur"          # envoyée telle quelle (ex: "0xFF", "1234", "toto")
 ```
+
 ---
 
-## 5. Test différentiel HK — `hk_diff_test`
+## 5. Capture de télémétrie en 3 phases — `hk_diff_test`
 
-Vérifie si une séquence mutée laisse un effet résiduel visible dans la HK
-d'un composant : envoie une séquence connue, la mute, la renvoie, puis
-renvoie la séquence ORIGINALE une seconde fois, et compare la HK capturée au
-tout début à celle capturée après ce cycle.
+Envoie une séquence connue à NOS3 en 3 temps (originale, mutée, puis
+originale une seconde fois) et capture la télémétrie de chaque phase dans un
+CSV séparé — pour repérer à l'œil un effet résiduel de la mutation (aucune
+comparaison automatique, c'est à toi de les lire/comparer).
 
 ```bash
 cargo run --bin hk_diff_test                               # state_sequences/NOVATEL_OEM615.json par défaut
@@ -301,8 +302,7 @@ Déroulement :
 1. **Phase 1 (baseline)** — envoie la séquence originale, capture la télémétrie.
 2. Redémarre NOS3 (`make stop && make launch`) pour repartir d'un état interne propre avant la mutation.
 3. **Phase 2 (mutée)** — mute la séquence (mêmes mutateurs que `cargo run`, configurés dans `fuzz_config.toml`), l'envoie, capture la télémétrie.
-4. **Phase 3 (replay)** — renvoie la séquence ORIGINALE, sans redémarrage depuis la phase 2 — c'est justement ce qui permet à un effet résiduel de la mutation de persister jusqu'ici, sinon la phase 3 ne pourrait jamais différer de la phase 1.
-5. Diff automatique entre phase 1 et phase 3 : nombre de trames par app, contenu du dernier paquet par app, et tout `AttackTag` non nul.
+4. **Phase 3 (replay)** — renvoie la séquence ORIGINALE, sans redémarrage depuis la phase 2 — c'est justement ce qui permet à un effet résiduel de la mutation de persister jusqu'ici, visible en comparant `hk_phase1_baseline.csv` et `hk_phase3_replay.csv` à la main.
 
 Chaque phase capture toute la télémétrie (`is_TC=0`) des apps ciblées par la
 séquence — HK périodique, réponses ponctuelles (`DS_GET_FILE_INFO_CC`,
@@ -384,7 +384,7 @@ src/
   lib.rs         → ré-exports pour partager le code entre main.rs et les bin/
   bin/
     send_packet.rs  → envoi manuel d'un paquet unique (cargo run --bin send_packet)
-    hk_diff_test.rs → test différentiel HK (cargo run --bin hk_diff_test)
+    hk_diff_test.rs → capture télémétrie en 3 phases (cargo run --bin hk_diff_test)
   config.rs      → chargement de fuzz_config.toml / fixed_fields.toml
   catalogue.rs    → chargement de catalogue_dump.json
   generator.rs    → génère les séquences de commandes (normal/naive/cross_app/stateful/fixed)
