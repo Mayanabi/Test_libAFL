@@ -321,35 +321,24 @@ Déroulement :
 4. **Phase 3 (replay)** — renvoie la séquence ORIGINALE, sans redémarrage depuis la phase 2 — c'est justement ce qui permet à un effet résiduel de la mutation de persister jusqu'ici, sinon la phase 3 ne pourrait jamais différer de la phase 1.
 5. Diff automatique entre phase 1 et phase 3 : nombre de trames par app, contenu du dernier paquet par app, et tout `AttackTag` non nul.
 
-**Toute la télémétrie des apps ciblées est capturée** (`is_TC=0`), pas
-seulement leur paquet HK périodique — les réponses ponctuelles comme
-`DS_GET_FILE_INFO_CC` (info fichier) ou `TBL_SEND_REGISTRY_CC` (registre de
-table) apparaissent aussi dans les CSV, **et leurs events EVS aussi** (ex:
-`MsgId=0808`, canal texte partagé par toutes les apps — mais un event publié
-via `CFE_EVS_SendEvent()` porte l'`AppId` de l'app appelante, pas un `AppId`
-générique EVS, donc il est gardé si l'app est ciblée). Seuls les commandes
-(`is_TC=1`) et le trafic — event EVS compris — des apps qui n'ont rien à voir
-avec la séquence testée restent exclus : l'app source de chaque ligne est
-identifiée par corrélation d'`AppId` avec son paquet HK (`hk_appids` dans
-`hk_diff_test.rs`) — dans cFS, un app = un process = un seul AppId, partagé
-par tout ce qu'il émet (HK, télémétrie ponctuelle, events). Résultat dans
-`hk_phase1_baseline.csv` / `hk_phase2_mutated.csv` / `hk_phase3_replay.csv`
+Chaque phase capture toute la télémétrie (`is_TC=0`) des apps ciblées par la
+séquence — HK périodique, réponses ponctuelles (`DS_GET_FILE_INFO_CC`,
+`TBL_SEND_REGISTRY_CC`, ...) et events EVS compris, commandes exclues — et
+écrit le résultat dans `hk_phase1_baseline.csv` / `hk_phase2_mutated.csv` /
+`hk_phase3_replay.csv`.
 
-Le `MsgId` HK attendu pour chaque app (utilisé comme signal d'ancrage pour
-la corrélation d'AppId ci-dessus, voir `expected_hk_msgids`) vient d'une
-table (`CMD_TO_HK_MID` dans `hk_diff_test.rs`) construite à partir des
-headers `*_msgids.h` du dépôt NOS3 — la vraie source de vérité, pas une
-supposition — et couvre les 30 apps du catalogue. Ce n'est **pas** un simple
-calcul (bit 12 à 0) : 8 apps sur 30 (CF, DS, ES, FM, LC, SBN, SC, SCH) ont un
-`MsgId` HK qui ne se déduit pas directement du `MsgId` de commande. Si un
-jour NOS3 ajoute une app absente de cette table, l'outil retombe sur ce
-calcul approximatif et prévient sur stderr (`⚠ MsgId ... absent de
-CMD_TO_HK_MID`).
+Le `MsgId` HK attendu pour chaque app vient d'une table (`CMD_TO_HK_MID`
+dans `hk_diff_test.rs`) construite à partir des headers `*_msgids.h` du
+dépôt NOS3 — la vraie source de vérité, pas une supposition — et couvre les
+30 apps du catalogue. Ce n'est **pas** un simple calcul (bit 12 à 0) : 8 apps
+sur 30 (CF, DS, ES, FM, LC, SBN, SC, SCH) ont un `MsgId` HK qui ne se déduit
+pas directement du `MsgId` de commande. Si un jour NOS3 ajoute une app
+absente de cette table, l'outil retombe sur ce calcul approximatif et
+prévient sur stderr (`⚠ MsgId ... absent de CMD_TO_HK_MID`).
 
 Chaque phase attend au maximum 20s la HK attendue ; si rien n'arrive dans ce
-délai, l'outil continue quand même et affiche `⚠` — dans ce cas l'AppId n'a
-pas pu être corrélé et le CSV de cette phase reste vide, même si l'app a
-émis d'autre télémétrie pendant la fenêtre.
+délai, l'outil continue quand même et affiche `⚠` — le CSV peut alors être
+incomplet.
 
 ---
 
