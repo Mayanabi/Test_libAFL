@@ -153,30 +153,6 @@ Pour une séquence de plusieurs commandes (modes `all`/`cross_app`), chaque
 commande a son propre verdict, concaténés avec `|` dans l'ordre d'envoi —
 ex: `"OK|DROP_SB_ERROR"` pour 2 commandes.
 
-**La clé de dédoublonnage** combine seulement deux choses :
-`{tc_name de la 1ère commande}:{verdicts concaténés}`. Concrètement :
-
-| Séquence envoyée | Verdicts | Clé | Nouveau ? |
-|---|---|---|---|
-| `NOOP` → `ENABLE` | `OK\|OK` | `NOOP:OK\|OK` | oui (1ère fois) → gardée |
-| `NOOP` → `ENABLE` (avec `ENABLE` muté différemment) | `OK\|OK` | `NOOP:OK\|OK` | **non**, clé déjà vue → jetée |
-| `NOOP` → `ENABLE` (mutation qui fait planter `ENABLE`) | `OK\|DROP_SB_ERROR` | `NOOP:OK\|DROP_SB_ERROR` | oui, chaîne de verdicts différente → gardée |
-
-Le nom des commandes 2, 3, ... n'entre jamais dans la clé — seuls **la
-commande qui a démarré la séquence** et **la façon dont NOS3 a réagi à
-chaque étape** comptent. Deux séquences dont les paquets mutés diffèrent
-byte pour byte mais qui produisent exactement le même enchaînement de
-verdicts sont donc traitées comme le même cas déjà exploré, et une seule est
-gardée.
-
-Une séquence annulée par Ctrl+C est systématiquement exclue du corpus,
-quelle que soit sa clé — son stdout est incomplet/garbage à ce moment-là, pas
-un vrai signal NOS3 (voir `killed_flag` dans `main.rs`).
-
-En mode `stateful`, `feedback.rs` fait aussi avancer la FSM partagée après
-chaque verdict (voir section 1) — c'est un mécanisme séparé, indépendant de
-la clé de dédoublonnage ci-dessus.
-
 ---
 
 ## 2. Figer certains champs pendant le fuzzing — `--fixed-fields`
