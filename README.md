@@ -132,12 +132,50 @@ verdict normal (`ExitKind::Ok`), traité comme une entrée corpus classique et
 
 ### Comment le feedback guide le corpus (`feedback.rs`)
 
-Une séquence est gardée en corpus si la clé
-`{tc_name de la 1ère commande}:{verdicts combinés de toutes les commandes}`
-(ex: `"NOVATEL_OEM615_NOOP_CC:OK|DROP_SB_ERROR"`) n'a jamais été vue. Cette
-clé ignore le nom des commandes 2, 3, ... d'une séquence multi-commandes
-(modes `all`/`cross_app`) : seule la 1ère commande et l'enchaînement des
-verdicts comptent pour la déduplication. Une séquence tuée par Ctrl+C est systématiquement exclue du corpus.
+Après chaque exécution (= chaque séquence envoyée à NOS3 via `wrapper.py`),
+LibAFL demande à `Nos3Feedback::is_interesting` une seule question :
+**cette séquence a-t-elle produit quelque chose de jamais vu ?** Si oui, elle
+est ajoutée au corpus (elle deviendra une base pour de futures mutations).
+Sinon, elle est jetée — même si elle a « marché », un doublon n'apprend rien
+de nouveau au fuzzer.
+
+**Le "verdict"**, c'est la réponse de NOS3 à *une* commande, lue dans
+`maya_feedback.log` (voir `wrapper.py` / `_poll_log`) :
+- `OK` — la commande a été acceptée normalement
+- `DROP_...` (ex: `DROP_LEN_MISMATCH`, `DROP_SB_ERROR`) — rejetée avant
+  exécution, NOS3 explique pourquoi dans le nom
+- `TIMEOUT` — rien n'est apparu dans le log à temps (paquet perdu, ou NOS3
+  qui traîne)
+- `CRASH` — un `TIMEOUT` confirmé par la mort réelle du process cFS (voir
+  section 1, "Ctrl+C")
+
+Pour une séquence de plusieurs commandes (modes `all`/`cross_app`), chaque
+commande a son propre verdict, concaténés avec `|` dans l'ordre d'envoi —
+ex: `"OK|DROP_SB_ERROR"` pour 2 commandes.
+
+**La clé de dédoublonnage** combine seulement deux choses :
+`{tc_name de la 1ère commande}:{verdicts concaténés}`. Concrètement :
+
+| Séquence envoyée | Verdicts | Clé | Nouveau ? |
+|---|---|---|---|
+| `NOOP` → `ENABLE` | `OK\|OK` | `NOOP:OK\|OK` | oui (1ère fois) → gardée |
+| `NOOP` → `ENABLE` (avec `ENABLE` muté différemment) | `OK\|OK` | `NOOP:OK\|OK` | **non**, clé déjà vue → jetée |
+| `NOOP` → `ENABLE` (mutation qui fait planter `ENABLE`) | `OK\|DROP_SB_ERROR` | `NOOP:OK\|DROP_SB_ERROR` | oui, chaîne de verdicts différente → gardée |
+
+Le nom des commandes 2, 3, ... n'entre jamais dans la clé — seuls **la
+commande qui a démarré la séquence** et **la façon dont NOS3 a réagi à
+chaque étape** comptent. Deux séquences dont les paquets mutés diffèrent
+byte pour byte mais qui produisent exactement le même enchaînement de
+verdicts sont donc traitées comme le même cas déjà exploré, et une seule est
+gardée.
+
+Une séquence annulée par Ctrl+C est systématiquement exclue du corpus,
+quelle que soit sa clé — son stdout est incomplet/garbage à ce moment-là, pas
+un vrai signal NOS3 (voir `killed_flag` dans `main.rs`).
+
+En mode `stateful`, `feedback.rs` fait aussi avancer la FSM partagée après
+chaque verdict (voir section 1) — c'est un mécanisme séparé, indépendant de
+la clé de dédoublonnage ci-dessus.
 
 ---
 
