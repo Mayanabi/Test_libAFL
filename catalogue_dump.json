@@ -4594,7 +4594,7 @@
     "stateless": false,
     "fuzz_priority": "NORMAL"
   },
-  "CF_RESET_COUNTERS_CC": {
+  "CF_RESET_CC": {
     "port": 5012,
     "target": "CFS",
     "args": [
@@ -4635,6 +4635,27 @@
       },
       {
         "NAME": "VALUE",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE1",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE2",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE3",
         "TYPE": "UINT",
         "SIZE": "8",
         "VALUE": "0",
@@ -4785,7 +4806,14 @@
         "ENDIANNESS": ""
       },
       {
-        "NAME": "CHAN",
+        "NAME": "KEEP",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "CHAN_NUM",
         "TYPE": "UINT",
         "SIZE": "8",
         "VALUE": "0",
@@ -4799,17 +4827,10 @@
         "ENDIANNESS": ""
       },
       {
-        "NAME": "PRESERVE",
+        "NAME": "DEST_ID",
         "TYPE": "UINT",
-        "SIZE": "8",
+        "SIZE": "32",
         "VALUE": "0",
-        "ENDIANNESS": ""
-      },
-      {
-        "NAME": "PEER_ENTITY_ID",
-        "TYPE": "STRING",
-        "SIZE": "128",
-        "VALUE": "\"\"",
         "ENDIANNESS": ""
       },
       {
@@ -4869,6 +4890,34 @@
         "SIZE": "8",
         "VALUE": "0x00",
         "ENDIANNESS": "BIG_ENDIAN"
+      },
+      {
+        "NAME": "CHAN",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE1",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE2",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE3",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
       }
     ],
     "app": "CF",
@@ -4913,6 +4962,34 @@
         "SIZE": "8",
         "VALUE": "0x00",
         "ENDIANNESS": "BIG_ENDIAN"
+      },
+      {
+        "NAME": "CHAN",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE1",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE2",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE3",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
       }
     ],
     "app": "CF",
@@ -4959,10 +5036,45 @@
         "ENDIANNESS": "BIG_ENDIAN"
       },
       {
-        "NAME": "TRANSACTION",
-        "TYPE": "STRING",
-        "SIZE": "128",
-        "VALUE": "\"\"",
+        "NAME": "TS",
+        "TYPE": "UINT",
+        "SIZE": "32",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "EID",
+        "TYPE": "UINT",
+        "SIZE": "32",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "CHAN",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE1",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE2",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE3",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
         "ENDIANNESS": ""
       }
     ],
@@ -5010,10 +5122,45 @@
         "ENDIANNESS": "BIG_ENDIAN"
       },
       {
-        "NAME": "TRANSACTION",
-        "TYPE": "STRING",
-        "SIZE": "128",
-        "VALUE": "\"\"",
+        "NAME": "TS",
+        "TYPE": "UINT",
+        "SIZE": "32",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "EID",
+        "TYPE": "UINT",
+        "SIZE": "32",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "CHAN",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE1",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE2",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE3",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
         "ENDIANNESS": ""
       }
     ],
@@ -5061,10 +5208,45 @@
         "ENDIANNESS": "BIG_ENDIAN"
       },
       {
-        "NAME": "TRANSACTION",
-        "TYPE": "STRING",
-        "SIZE": "128",
-        "VALUE": "\"\"",
+        "NAME": "TS",
+        "TYPE": "UINT",
+        "SIZE": "32",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "EID",
+        "TYPE": "UINT",
+        "SIZE": "32",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "CHAN",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE1",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE2",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE3",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
         "ENDIANNESS": ""
       }
     ],
@@ -5112,10 +5294,45 @@
         "ENDIANNESS": "BIG_ENDIAN"
       },
       {
-        "NAME": "TRANSACTION",
-        "TYPE": "STRING",
-        "SIZE": "128",
-        "VALUE": "\"\"",
+        "NAME": "TS",
+        "TYPE": "UINT",
+        "SIZE": "32",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "EID",
+        "TYPE": "UINT",
+        "SIZE": "32",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "CHAN",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE1",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE2",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE3",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
         "ENDIANNESS": ""
       }
     ],
@@ -5123,7 +5340,7 @@
     "stateless": false,
     "fuzz_priority": "NORMAL"
   },
-  "CF_SET_MIB_PARAMETER_CC": {
+  "CF_SET_MIB_PARAM_CC": {
     "port": 5012,
     "target": "CFS",
     "args": [
@@ -5163,17 +5380,38 @@
         "ENDIANNESS": "BIG_ENDIAN"
       },
       {
-        "NAME": "PARAM",
-        "TYPE": "STRING",
-        "SIZE": "256",
-        "VALUE": "\"\"",
+        "NAME": "VALUE",
+        "TYPE": "UINT",
+        "SIZE": "32",
+        "VALUE": "0",
         "ENDIANNESS": ""
       },
       {
-        "NAME": "VALUE",
-        "TYPE": "STRING",
-        "SIZE": "256",
-        "VALUE": "\"\"",
+        "NAME": "KEY",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "CHAN_NUM",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE1",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE2",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
         "ENDIANNESS": ""
       }
     ],
@@ -5181,7 +5419,7 @@
     "stateless": false,
     "fuzz_priority": "NORMAL"
   },
-  "CF_GET_MIB_PARAMETER_CC": {
+  "CF_GET_MIB_PARAM_CC": {
     "port": 5012,
     "target": "CFS",
     "args": [
@@ -5221,10 +5459,17 @@
         "ENDIANNESS": "BIG_ENDIAN"
       },
       {
-        "NAME": "PARAM",
-        "TYPE": "STRING",
-        "SIZE": "256",
-        "VALUE": "\"\"",
+        "NAME": "KEY",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "CHAN_NUM",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
         "ENDIANNESS": ""
       }
     ],
@@ -5232,7 +5477,7 @@
     "stateless": false,
     "fuzz_priority": "NORMAL"
   },
-  "CF_WRITE_QUEUE_INFO_CC": {
+  "CF_WRITE_QUEUE_CC": {
     "port": 5012,
     "target": "CFS",
     "args": [
@@ -5291,6 +5536,20 @@
         "SIZE": "8",
         "VALUE": "0",
         "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "FILENAME",
+        "TYPE": "STRING",
+        "SIZE": "512",
+        "VALUE": "\"\"",
+        "ENDIANNESS": ""
       }
     ],
     "app": "CF",
@@ -5338,6 +5597,27 @@
       },
       {
         "NAME": "CHAN",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE1",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE2",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE3",
         "TYPE": "UINT",
         "SIZE": "8",
         "VALUE": "0",
@@ -5393,13 +5673,34 @@
         "SIZE": "8",
         "VALUE": "0",
         "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE1",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE2",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE3",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
       }
     ],
     "app": "CF",
     "stateless": false,
     "fuzz_priority": "NORMAL"
   },
-  "CF_ENABLE_DIRECTORY_POLLING_CC": {
+  "CF_ENABLE_DIR_POLLING_CC": {
     "port": 5012,
     "target": "CFS",
     "args": [
@@ -5451,13 +5752,27 @@
         "SIZE": "8",
         "VALUE": "0",
         "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE1",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE2",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
       }
     ],
     "app": "CF",
     "stateless": false,
     "fuzz_priority": "NORMAL"
   },
-  "CF_DISABLE_DIRECTORY_POLLING_CC": {
+  "CF_DISABLE_DIR_POLLING_CC": {
     "port": 5012,
     "target": "CFS",
     "args": [
@@ -5509,56 +5824,19 @@
         "SIZE": "8",
         "VALUE": "0",
         "ENDIANNESS": ""
-      }
-    ],
-    "app": "CF",
-    "stateless": false,
-    "fuzz_priority": "NORMAL"
-  },
-  "CF_DELETE_QUEUE_NODE_CC": {
-    "port": 5012,
-    "target": "CFS",
-    "args": [
-      {
-        "NAME": "ID",
-        "TYPE": "UINT",
-        "SIZE": "16",
-        "VALUE": "0x18B3",
-        "ENDIANNESS": "BIG_ENDIAN"
       },
       {
-        "NAME": "SEQ",
-        "TYPE": "UINT",
-        "SIZE": "16",
-        "VALUE": "0xC000",
-        "ENDIANNESS": "BIG_ENDIAN"
-      },
-      {
-        "NAME": "LEN",
-        "TYPE": "UINT",
-        "SIZE": "16",
-        "VALUE": "0x0001",
-        "ENDIANNESS": "BIG_ENDIAN"
-      },
-      {
-        "NAME": "FC",
+        "NAME": "SPARE1",
         "TYPE": "UINT",
         "SIZE": "8",
-        "VALUE": "0x14",
-        "ENDIANNESS": "BIG_ENDIAN"
+        "VALUE": "0",
+        "ENDIANNESS": ""
       },
       {
-        "NAME": "CHECKSUM",
+        "NAME": "SPARE2",
         "TYPE": "UINT",
         "SIZE": "8",
-        "VALUE": "0x00",
-        "ENDIANNESS": "BIG_ENDIAN"
-      },
-      {
-        "NAME": "TRANSACTION_NODE",
-        "TYPE": "STRING",
-        "SIZE": "256",
-        "VALUE": "\"\"",
+        "VALUE": "0",
         "ENDIANNESS": ""
       }
     ],
@@ -5606,13 +5884,6 @@
         "ENDIANNESS": "BIG_ENDIAN"
       },
       {
-        "NAME": "TYPE",
-        "TYPE": "UINT",
-        "SIZE": "8",
-        "VALUE": "0",
-        "ENDIANNESS": ""
-      },
-      {
         "NAME": "CHAN",
         "TYPE": "UINT",
         "SIZE": "8",
@@ -5625,13 +5896,27 @@
         "SIZE": "8",
         "VALUE": "0",
         "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE1",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
+      },
+      {
+        "NAME": "SPARE2",
+        "TYPE": "UINT",
+        "SIZE": "8",
+        "VALUE": "0",
+        "ENDIANNESS": ""
       }
     ],
     "app": "CF",
     "stateless": false,
     "fuzz_priority": "NORMAL"
   },
-  "CF_WRITE_ACTIVE_TRANS_CC": {
+  "CF_ENABLE_ENGINE_CC": {
     "port": 5012,
     "target": "CFS",
     "args": [
@@ -5669,27 +5954,13 @@
         "SIZE": "8",
         "VALUE": "0x00",
         "ENDIANNESS": "BIG_ENDIAN"
-      },
-      {
-        "NAME": "TYPE",
-        "TYPE": "UINT",
-        "SIZE": "8",
-        "VALUE": "0",
-        "ENDIANNESS": ""
-      },
-      {
-        "NAME": "FILENAME",
-        "TYPE": "STRING",
-        "SIZE": "256",
-        "VALUE": "\"\"",
-        "ENDIANNESS": ""
       }
     ],
     "app": "CF",
     "stateless": false,
     "fuzz_priority": "NORMAL"
   },
-  "CF_KICKSTART_CC": {
+  "CF_DISABLE_ENGINE_CC": {
     "port": 5012,
     "target": "CFS",
     "args": [
@@ -5727,122 +5998,6 @@
         "SIZE": "8",
         "VALUE": "0x00",
         "ENDIANNESS": "BIG_ENDIAN"
-      },
-      {
-        "NAME": "CHAN",
-        "TYPE": "UINT",
-        "SIZE": "8",
-        "VALUE": "0",
-        "ENDIANNESS": ""
-      }
-    ],
-    "app": "CF",
-    "stateless": false,
-    "fuzz_priority": "NORMAL"
-  },
-  "CF_GIVE_TAKE_CC": {
-    "port": 5012,
-    "target": "CFS",
-    "args": [
-      {
-        "NAME": "ID",
-        "TYPE": "UINT",
-        "SIZE": "16",
-        "VALUE": "0x18B3",
-        "ENDIANNESS": "BIG_ENDIAN"
-      },
-      {
-        "NAME": "SEQ",
-        "TYPE": "UINT",
-        "SIZE": "16",
-        "VALUE": "0xC000",
-        "ENDIANNESS": "BIG_ENDIAN"
-      },
-      {
-        "NAME": "LEN",
-        "TYPE": "UINT",
-        "SIZE": "16",
-        "VALUE": "0x0001",
-        "ENDIANNESS": "BIG_ENDIAN"
-      },
-      {
-        "NAME": "FC",
-        "TYPE": "UINT",
-        "SIZE": "8",
-        "VALUE": "0x19",
-        "ENDIANNESS": "BIG_ENDIAN"
-      },
-      {
-        "NAME": "CHECKSUM",
-        "TYPE": "UINT",
-        "SIZE": "8",
-        "VALUE": "0x00",
-        "ENDIANNESS": "BIG_ENDIAN"
-      },
-      {
-        "NAME": "CHAN",
-        "TYPE": "UINT",
-        "SIZE": "8",
-        "VALUE": "0",
-        "ENDIANNESS": ""
-      },
-      {
-        "NAME": "GIVE_OR_TAKE",
-        "TYPE": "UINT",
-        "SIZE": "8",
-        "VALUE": "0",
-        "ENDIANNESS": ""
-      }
-    ],
-    "app": "CF",
-    "stateless": false,
-    "fuzz_priority": "HIGH"
-  },
-  "CF_ENADIS_AUTO_SUSPEND_CC": {
-    "port": 5012,
-    "target": "CFS",
-    "args": [
-      {
-        "NAME": "ID",
-        "TYPE": "UINT",
-        "SIZE": "16",
-        "VALUE": "0x18B3",
-        "ENDIANNESS": "BIG_ENDIAN"
-      },
-      {
-        "NAME": "SEQ",
-        "TYPE": "UINT",
-        "SIZE": "16",
-        "VALUE": "0xC000",
-        "ENDIANNESS": "BIG_ENDIAN"
-      },
-      {
-        "NAME": "LEN",
-        "TYPE": "UINT",
-        "SIZE": "16",
-        "VALUE": "0x0001",
-        "ENDIANNESS": "BIG_ENDIAN"
-      },
-      {
-        "NAME": "FC",
-        "TYPE": "UINT",
-        "SIZE": "8",
-        "VALUE": "0x1A",
-        "ENDIANNESS": "BIG_ENDIAN"
-      },
-      {
-        "NAME": "CHECKSUM",
-        "TYPE": "UINT",
-        "SIZE": "8",
-        "VALUE": "0x00",
-        "ENDIANNESS": "BIG_ENDIAN"
-      },
-      {
-        "NAME": "DIS_EN",
-        "TYPE": "UINT",
-        "SIZE": "8",
-        "VALUE": "0",
-        "ENDIANNESS": ""
       }
     ],
     "app": "CF",

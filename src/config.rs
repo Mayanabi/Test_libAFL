@@ -9,13 +9,13 @@ pub enum FuzzMode {
     SingleApp,
     /// Plusieurs apps ciblées (apps = ["ES", "CF", ...])
     MultiApp,
-    /// Toutes les TC du catalogue (~315 TC), une par séquence
+    /// Toutes les TC du catalogue, une par séquence
     All,
     /// Séquences qui mixent des TC de différentes apps
     CrossApp,
-    /// Flood naïf — pas de feedback, ~110 pkt/sec
+    /// Flood naif : pas de feedback, environ 110 pkt/sec
     Naive,
-    /// Guidé par machine d'états — lit les FSM YAMLs de maya3
+    /// Guidé par machine d'états : lit les FSM YAMLs de maya3
     Stateful,
 }
 
@@ -44,10 +44,9 @@ pub struct FuzzConfig {
     pub fsm_dir: String,
 
     /// Mutateur(s) actifs pendant le fuzzing, choisis dans la liste proposée
-    /// (voir MutatorKind). Une seule entrée → ce mutateur est utilisé pour
-    /// tous les paquets mutés. Plusieurs entrées → un mutateur est tiré au
-    /// hasard dans cette liste à chaque paquet muté. Absent → tous les
-    /// mutateurs disponibles sont utilisés (tirage aléatoire parmi tous).
+    ///.Une seule entrée => ce mutateur est utilisé pour tous les paquets mutés. 
+    // Plusieurs entrées => un mutateur est tiré au hasard dans cette liste à chaque paquet muté.
+    // Absent → tous les mutateurs disponibles sont utilisés (tirage aléatoire parmi tous).
     #[serde(default = "default_mutators")]
     pub mutators: Vec<MutatorKind>,
 }
@@ -64,7 +63,7 @@ pub fn load(path: &str) -> FuzzConfig {
     let raw = std::fs::read_to_string(path)
         .unwrap_or_else(|e| panic!(
             "Impossible de lire {path}: {e}\n\
-             → Vérifie que fuzz_config.toml est présent à la racine du projet"
+             => Vérifie que fuzz_config.toml est présent à la racine du projet"
         ));
     toml::from_str(&raw)
         .unwrap_or_else(|e| panic!("TOML invalide dans {path}: {e}"))

@@ -36,9 +36,25 @@ _MAKE_TIMEOUT    = 180.0  # temps max pour chacun de make stop / make launch
 # Endianness Rust → format attendu par CmdSender.py
 _ENDIAN = {"BIG": "BIG_ENDIAN", "LITTLE": "LITTLE_ENDIAN"}
 
-# IP et PID résolus une seule fois par Rust au démarrage, passés via env vars.
+# IP résolue une seule fois par Rust au démarrage, passée via env var
+# (NOS3_IP) mais pas encore branchée ici — re-résolue à chaque invocation,
+# ça ne bouge pas tant que le conteneur n'est pas redémarré.
 _NOS3_IP   = CmdSender.getDockerIP()
-_INIT_PID  = ProcessMonitoring.get_cfs_pid()
+
+# PID cFS : utilise NOS3_CFS_PID (résolu UNE SEULE FOIS par Rust au tout
+# début du run, voir Nos3Executor::spawn_child) plutôt que de le
+# re-résoudre nous-mêmes à chaque invocation de wrapper.py. Important après
+# un crash non suivi d'un redémarrage automatique (_wait_for_nos3_ready
+# désactivée plus bas) : re-résoudre donnerait None (plus aucun process
+# cFS), ce qui désactivait silencieusement la détection de crash pour le
+# reste du run (voir le check `_INIT_PID is not None` dans main()) — cFS
+# restait mort mais wrapper.py continuait à répondre TIMEOUT comme si de
+# rien n'était, sans jamais re-signaler CRASH. Fallback sur la résolution
+# directe si l'env var est absente (ex: hk_diff_test.rs, send_packet.rs,
+# qui ne la passent pas).
+_cfs_pid_env = os.environ.get("NOS3_CFS_PID", "")
+_INIT_PID = int(_cfs_pid_env) if _cfs_pid_env.isdigit() else ProcessMonitoring.get_cfs_pid()
+
 _FUZZ_MODE = os.environ.get("FUZZ_MODE", "normal")  # si pas configuré par défaut c normal
 
 # Socket UDP réutilisé pour toute la durée du processus.
@@ -113,14 +129,20 @@ def _clean_env_for_gui() -> dict:
 
 def _wait_for_nos3_ready() -> None:
     """
+    NON APPELÉE ACTUELLEMENT (voir l'appel commenté dans main()) — désactivée
+    volontairement pour qu'un crash laisse NOS3 tel quel, inspectable, plutôt
+    que redémarré automatiquement. main.rs (côté Rust) arrête toute la
+    boucle de fuzzing dès qu'un crash est confirmé, précisément parce que
+    rien ici ne relance NOS3.
+
     Force un redémarrage propre de NOS3 (make stop && make launch) après un
     crash, pour repartir toujours du même état initial connu, puis bloque
     jusqu'à ce que cFS réponde de nouveau.
 
-    Appelée dès qu'un crash/restart est détecté, AVANT de retourner le verdict
-    à LibAFL. LibAFL reste bloqué sur cette unique invocation de wrapper.py
-    jusqu'au retour de cFS ===> les tests d'aprés ne repartent qu'une fois NOS3
-    prêt, dans un état reproductible.
+    Si un jour réactivée : appelée dès qu'un crash/restart est détecté, AVANT
+    de retourner le verdict à LibAFL. LibAFL reste bloqué sur cette unique
+    invocation de wrapper.py jusqu'au retour de cFS ===> les tests d'après ne
+    repartent qu'une fois NOS3 prêt, dans un état reproductible.
     """
     print("[wrapper.py] cFS crash : redémarrage NOS3 (make stop - make launch)...",
           file=sys.stderr)
@@ -244,6 +266,15 @@ def main() -> int:
         verdict = _send_and_wait(cmd)
 
         # Crash check — uniquement sur TIMEOUT pour éviter docker exec à chaque commande
+        #
+        # Note : fsw_respawn.sh (dans le conteneur sc0N-nos-fsw) relance
+        # automatiquement core-cpu1 avec un NOUVEAU PID en 1-6s, que sa mort
+        # soit due à un restart volontaire (CFE_ES_RESTART_CC) ou à un vrai
+        # crash (segfault/abort) — les deux cas sont indiscernables par PID.
+        # Donc tout changement de PID (pas seulement une disparition pure)
+        # reste traité comme CRASH : un process qui meurt et doit être
+        # relancé est justement la découverte que le fuzzer doit remonter,
+        # même si fsw_respawn.sh le "soigne" ensuite tout seul.
         if verdict == "TIMEOUT" and _INIT_PID is not None:
             if not ProcessMonitoring.CheckProcessIsAlive(_INIT_PID):
                 print(
@@ -251,7 +282,7 @@ def main() -> int:
                     f"({cmd.get('tc_name','?')}, PID={_INIT_PID})",
                     file=sys.stderr,
                 )
-                _wait_for_nos3_ready()
+                #_wait_for_nos3_ready()
                 print(json.dumps({"verdict": "CRASH"}))
                 sys.stdout.flush()
                 return 1

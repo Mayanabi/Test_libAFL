@@ -9,9 +9,8 @@
 #   all         → toutes les apps sans liste  (apps ignoré, ~315 TC)
 #   cross_app   → séquences multi-apps        (mix aléatoire d'apps différentes)
 #   naive       → flood sans feedback         (~110 pkt/sec, naive_batch_size paquets/exec)
-#   stateful    → guidé par machine d'états   (FSM YAMLs dans fsm_dir)
 #
-mode = "cross_app"
+mode = "multi_app"
 
 # ─── APPS CIBLÉES ─────────────────────────────────────────────────────────────
 # Utilisé pour single_app et multi_app uniquement.
@@ -24,7 +23,7 @@ mode = "cross_app"
 #              GENERIC_STAR_TRACKER, GENERIC_THRUSTER, GENERIC_TORQUER,
 #              MGR, NOVATEL_OEM615, SAMPLE, SYN
 #
-apps = ["NOVATEL_OEM615"]
+apps = ["CF", "DS", "ES", "EVS", "FM", "SB"]
 
 # ─── PARAMÈTRES CROSS-APP ─────────────────────────────────────────────────────
 # Actifs uniquement si mode = "cross_app".
@@ -39,13 +38,6 @@ cross_app_max_tc = 5
 #
 naive_batch_size = 10
 
-# ─── PARAMÈTRES STATEFUL ──────────────────────────────────────────────────────
-# Actif uniquement si mode = "stateful".
-# Répertoire contenant les FSM YAMLs générés pour chaque app NOS3 — copiées
-# une fois dans ce projet (fsm/) depuis maya3/patterns/stateful, plus besoin
-# de ce projet externe pour lancer le mode stateful.
-#
-fsm_dir = "fsm"
 
 # ─── MUTATEURS ──────────────────────────────────────────────────────────────
 # Optionnel — commenter (ou supprimer) pour utiliser tous les mutateurs
@@ -75,4 +67,4 @@ fsm_dir = "fsm"
 # Exemple (plusieurs, tirage aléatoire à chaque paquet) :
 #   mutators = ["arg_value", "fc_walk", "int_boundary", "apid", "seq_count"]
 #
-# mutators = ["arg_value", "fc_walk", "int_boundary", "string_special", "command_reorder", "delay", "version", "packet_type", "sec_hdr_flag", "apid", "seq_flags", "seq_count"]
+mutators = ["string_special"]

@@ -71,7 +71,7 @@ impl CommandConfigurator<Child> for Nos3Executor {
         *self.current_pid.lock().unwrap() = Some(child.id());
 
         // take() retire stdin du Child et le drop implicitement à la fin du bloc
-        // → Python voit EOF immédiatement après l'écriture, sans attendre que
+        // Python voit EOF immédiatement après l'écriture, sans attendre que
         // LibAFL décide de fermer le pipe de son côté.
         {
             let mut stdin = child.stdin.take().expect("stdin was piped");
@@ -81,10 +81,6 @@ impl CommandConfigurator<Child> for Nos3Executor {
         } // stdin dropped ici → EOF immédiat côté Python
 
         Ok(child)
-        // Note : exit_kind_from_status() a une implémentation par défaut,
-        // qu'on laisse pour l'instant — Crash si le process termine en erreur,
-        // Ok sinon. On affinera plus tard si besoin (ex: code retour spécifique
-        // pour distinguer un DROP_* d'un vrai crash du wrapper).
     }
     fn stdout_observer(&self) -> Option<Handle<StdOutObserver>> {
         Some(self.stdout_handle.clone())

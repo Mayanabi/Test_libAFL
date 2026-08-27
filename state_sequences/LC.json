@@ -13,6 +13,7 @@
           "size_bits": 16,
           "value": "0x18A4",
           "endianness": "BIG"
+          
         },
         {
           "name": "SEQ",

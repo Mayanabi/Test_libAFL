@@ -17,7 +17,7 @@ use executor::Nos3Executor;
 use feedback::Nos3Feedback;
 
 use libafl::{
-    corpus::{InMemoryCorpus, OnDiskCorpus},
+    corpus::{Corpus, InMemoryCorpus, OnDiskCorpus},
     events::SimpleEventManager,
     executors::command::CommandConfigurator,
     feedbacks::CrashFeedback,
@@ -26,7 +26,7 @@ use libafl::{
     observers::StdOutObserver,
     schedulers::QueueScheduler,
     stages::mutational::StdMutationalStage,
-    state::StdState,
+    state::{HasSolutions, StdState},
 };
 use libafl_bolts::{
     current_nanos,
@@ -335,6 +335,11 @@ pub fn main() {
     // Boucle manuelle (au lieu de fuzzer.fuzz_loop) pour pouvoir réagir au
     // Ctrl+C : annuler juste la séquence en cours et continuer, ou arrêter
     // proprement sur double Ctrl+C.
+    //
+    // solutions_count : nombre de crashes déjà dans ./crashes/ (chargés au
+    // démarrage de StdState si le dossier existait déjà) — sert de référence
+    // pour détecter un NOUVEAU crash pendant cette session (voir plus bas).
+    let solutions_count = state.solutions().count();
     loop {
         if stop_flag.load(Ordering::SeqCst) {
             println!("[main] Arrêt total (Ctrl+C x2).");
@@ -344,6 +349,22 @@ pub fn main() {
 
         if let Err(e) = fuzzer.fuzz_one(&mut stages, &mut executor, &mut state, &mut mgr) {
             eprintln!("[main] Erreur pendant l'itération (probablement due à l'annulation): {e}");
+        }
+
+        // Le redémarrage automatique de NOS3 sur crash est désactivé côté
+        // wrapper.py (_wait_for_nos3_ready commentée) — donc un cFS mort le
+        // reste pour de vrai après un crash. Sans ce check, la boucle
+        // continuerait indéfiniment à générer et envoyer des séquences dans
+        // le vide. On arrête plutôt tout net, sans toucher à NOS3, pour
+        // laisser l'état crashé intact et inspectable.
+        if state.solutions().count() > solutions_count {
+            println!(
+                "[main] Crash cFS confirmé — arrêt du fuzzing (pas de redémarrage \
+                 automatique, voir wrapper.py). NOS3 est laissé tel quel pour inspection ; \
+                 relance-le toi-même (`make launch` dans {}) puis relance `cargo run`.",
+                nos3_control::NOS3_DIR
+            );
+            break;
         }
 
         // stop_flag est prioritaire sur cancel_flag : un double Ctrl+C pendant

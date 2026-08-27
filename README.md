@@ -15,12 +15,18 @@ make stop            # arrête NOS3
 
 Sans ça, tout ce qui suit échoue avec `IP NOS3 introuvable`.
 
-Un redémarrage automatique de NOS3 (Ctrl+C simple, crash détecté, ou entre
-les phases de `hk_diff_test`) lance `make launch` dans un nouveau
-`gnome-terminal` — un environnement de bureau avec `gnome-terminal`
-disponible est donc requis pour que ces redémarrages automatiques
-fonctionnent (le code nettoie au passage les variables d'env `GTK_PATH`/
-`SNAP*` pour éviter les conflits quand Claude/VSCode tourne dans un snap).
+Un redémarrage automatique de NOS3 (Ctrl+C simple, ou entre les phases de
+`hk_diff_test`) lance `make launch` dans un nouveau `gnome-terminal` — un
+environnement de bureau avec `gnome-terminal` disponible est donc requis
+pour que ces redémarrages automatiques fonctionnent (le code nettoie au
+passage les variables d'env `GTK_PATH`/`SNAP*` pour éviter les conflits
+quand Claude/VSCode tourne dans un snap).
+
+**Sur un crash cFS détecté pendant `cargo run`, NOS3 n'est PAS redémarré
+automatiquement** (désactivé volontairement dans `wrapper.py`, voir section
+"Ctrl+C" plus bas) — le fuzzing s'arrête net à la place, pour laisser l'état
+crashé intact et inspectable. Il faut relancer `make launch` toi-même puis
+relancer `cargo run`.
 
 ---
 
@@ -118,10 +124,13 @@ Quelques comportements moins évidents à la lecture :
   Ctrl+C) avant de redémarrer NOS3 proprement et continuer. 
 - 2 fois rapprochées → arrêt total.
 
-Le redémarrage automatique **sur crash détecté** (pas Ctrl+C) est un chemin
-différent : il est déclenché et géré côté Python, dans `wrapper.py`, dès
-qu'un `TIMEOUT` est confirmé par la mort du process cFS — pas dans
-`nos3_control.rs` (qui ne gère que Ctrl+C et `hk_diff_test`).
+Un **crash détecté** (pas Ctrl+C) est un chemin différent : il est détecté
+côté Python, dans `wrapper.py`, dès qu'un `TIMEOUT` est confirmé par la mort
+du process cFS. Le redémarrage automatique NOS3 sur ce cas précis
+(`_wait_for_nos3_ready()`) est désactivé dans le code — un crash confirmé
+arrête tout le fuzzing côté Rust (`main.rs`) à la place, sans toucher à
+NOS3, pour laisser l'état crashé intact et inspectable. `nos3_control.rs`
+ne gère donc que Ctrl+C et `hk_diff_test`, pas ce cas.
 
 Les crashes sont sauvegardés dans `./crashes/`, directement en **JSON lisible**
 (même format que celui envoyé à `wrapper.py`) — voir section 6 pour les rejouer.
@@ -349,15 +358,23 @@ Pour un bug déjà documenté/analysé, avec une séquence précise écrite à l
 (par opposition à un crash brut du fuzzer) :
 
 ```bash
-python3 replay_from_log.py sequence.txt   # rejoue les lignes MsgId/FC d'un extrait de log
+python3 replay_from_log.py sequence.txt   # rejoue un extrait de maya_feedback.log
 python3 replay_from_log.py                # ou colle les lignes via stdin
 
 python3 replay_novatel_serial.py          # rejoue une séquence spécifique câblée en dur
 ```
 
-Ces scripts parlent directement à NOS3 en UDP (via `CmdSender.py`), sans
-passer par `wrapper.py` ni par LibAFL — utiles pour une reproduction rapide
-et isolée d'un bug déjà trouvé.
+`replay_from_log.py` renvoie les octets **exacts** capturés dans le log (le
+hex après `=>` sur chaque ligne `OK`/`DROP_SB_ERROR`, voir `ci_lab_app.c`),
+pas une reconstruction depuis `MsgId`/`FC` avec des champs par défaut —
+indispensable pour rejouer fidèlement un paquet dont les arguments ont été
+mutés par le fuzzer. Les lignes `DROP_LEN_MISMATCH`/`DROP_BAD_SIZE` n'ont pas
+de hex de paquet dans le log (rejetées avant reconstruction complète côté
+cFS) et sont ignorées.
+
+Ces scripts parlent directement à NOS3 en UDP, sans passer par `wrapper.py`
+ni par LibAFL — utiles pour une reproduction rapide et isolée d'un bug déjà
+trouvé.
 
 ---
 
